@@ -15,13 +15,21 @@ local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
 
 local Hud = require(script.Parent:WaitForChild("UI"):WaitForChild("Hud"))
-local CultivationBar = require(script.Parent:WaitForChild("UI"):WaitForChild("CultivationBar"))
+-- Thanh tiến độ dùng CHUNG với preview edit mode (src/shared/UI/CultivationBarView.luau)
+local CultivationBarView = require(Shared:WaitForChild("UI"):WaitForChild("CultivationBarView"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local hud = Hud.new(playerGui, Config)
-local bar = CultivationBar.new(playerGui)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BrigeCultivation"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+
+local bar = CultivationBarView.new(screenGui)
 
 local StateRemote = Net.waitForRemote("CultivationState", 20)
 local ActionRemote = Net.waitForRemote("CultivationAction", 20)

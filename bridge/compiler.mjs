@@ -200,7 +200,7 @@ function makeActionId(code) {
 	return `act-${digest}`;
 }
 
-export function compileSyncBundle(extraAction = null) {
+export function compileSyncBundle(extraActions = null) {
 	const rawProject = JSON.parse(fs.readFileSync(PROJECT_FILE, "utf8"));
 	const tree = rawProject.tree || {};
 	const fileManifest = [];
@@ -215,17 +215,18 @@ export function compileSyncBundle(extraAction = null) {
 
 	const prev = loadExistingBundle();
 	const actions = Array.isArray(prev.actions) ? [...prev.actions] : [];
-	if (extraAction) {
+	const incoming = Array.isArray(extraActions) ? extraActions : extraActions ? [extraActions] : [];
+	for (const action of incoming) {
 		// id băm từ nội dung: nếu đã có action y hệt thì GIỮ bản cũ (createdAt ổn định),
 		// nhờ vậy publish lặp lại không làm đổi hash/version.
-		const previous = actions.find((a) => a.id === extraAction.id);
-		const deduped = actions.filter((a) => a.id !== extraAction.id);
-		deduped.push(previous || extraAction);
+		const previous = actions.find((a) => a.id === action.id);
+		const deduped = actions.filter((a) => a.id !== action.id);
+		deduped.push(previous || action);
 		actions.length = 0;
 		actions.push(...deduped);
-		if (actions.length > 50) {
-			actions.splice(0, actions.length - 50);
-		}
+	}
+	if (actions.length > 50) {
+		actions.splice(0, actions.length - 50);
 	}
 
 	const contentHash = crypto

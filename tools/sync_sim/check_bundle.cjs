@@ -119,8 +119,20 @@ function flattenSources(node, prefix, out) {
       if (!latest.code.includes(token)) warn(`Tác vụ dựng lại thiếu "${token}" — có thể đã lỗi thời.`);
     }
     for (const a of actions) {
-      if (!/^act-[0-9a-f]{12}$/.test(String(a.id))) bad(`Action id không ổn định: ${a.id} (plugin nhớ id đã chạy → id phải băm từ nội dung).`);
+      if (!/^act-[0-9a-f]{12}$/.test(String(a.id))) bad(`Action id không ổn định: ${a.id} (id phải băm từ nội dung code).`);
       if (typeof a.code === "string" && a.code.includes("RobloxStudio-connecting")) bad(`Action ${a.id} còn tham chiếu repo gốc RobloxStudio-connecting.`);
+      // tác vụ dựng lại phải KHÔNG đánh dấu once: nội dung đổi là phải chạy lại
+      if (a.once === true && !String(a.id).includes("once")) {
+        bad(`Action ${a.id} bị đánh dấu once=true → sẽ chỉ chạy 1 lần, đổi nội dung cũng không chạy lại.`);
+      }
+    }
+
+    // Preview edit mode phải có mặt (để xem UI mà không cần Play)
+    const preview = actions.filter((a) => typeof a.code === "string" && a.code.includes("BrigeCultivationPreview"));
+    if (preview.length === 0) {
+      warn("Gói KHÔNG có action preview edit mode — chỉ xem được UI sau khi bấm Play.");
+    } else {
+      ok(`có action preview edit mode (${preview[preview.length - 1].id}) — xem UI không cần Play`);
     }
   }
 
@@ -152,6 +164,17 @@ function flattenSources(node, prefix, out) {
     if (plugin.includes("arena/b37b6115-robloxstudio-connecting") && repoName && repoName[1] === "brige") {
       bad("Plugin còn hard-code nhánh của repo gốc.");
     }
+    // Lỗi "cập nhật không được": plugin chỉ nhớ action.id → action id cố định
+    // (băm từ nội dung file) chỉ chạy 1 lần duy nhất, các lần sync sau bị bỏ qua.
+    if (!plugin.includes("bundleKey") && !/hash/.test(plugin.match(/function runQueuedActions\([^)]*\)/)?.[0] || "")) {
+      bad(
+        "Plugin chống chạy trùng theo action.id (không theo hash gói) → tác vụ dựng lại chỉ chạy lần đầu, " +
+          "các lần publish sau Studio nhận script mới nhưng map KHÔNG đổi. Đây là lỗi 'cập nhật không được'."
+      );
+    } else {
+      ok("plugin chống chạy trùng theo hash gói → publish mới là chạy lại tác vụ");
+    }
+
     const shaConst = plugin.match(/BASE_COMMIT_SHA\s*=\s*"([^"]*)"/);
     if (!shaConst) bad("Plugin thiếu hằng BASE_COMMIT_SHA (ghim bản build).");
     if (plugin.includes("__BRIDGE_COMMIT_SHA__")) warn("Plugin còn placeholder SHA — bình thường, vì plugin tải theo SHA trong lệnh Command Bar.");

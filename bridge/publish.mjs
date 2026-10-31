@@ -27,8 +27,11 @@ import {
 	buildGitHubCommandBarOneLiner,
 } from "./compiler.mjs";
 
-// Tác vụ dựng lại thế giới (mặc định kèm mỗi lần publish, giống repo gốc).
+// Tác vụ mặc định kèm mỗi lần publish:
+//   1. dựng lại thế giới (bắt buộc — không có thì map không đổi)
+//   2. preview thanh tu luyện ngay trong edit mode (không cần bấm Play)
 const REBUILD_ACTION_FILE = "bridge/rebuild_world_action.luau";
+const PREVIEW_ACTION_FILE = "bridge/preview_cultivation_action.luau";
 
 function parseArgs(argv) {
 	let message = "chore: cập nhật đồng bộ Roblox Studio (Rojo + Bridge)";
@@ -37,11 +40,13 @@ function parseArgs(argv) {
 	let actionFile = null;
 	let noAction = false;
 	let dryRun = false;
+	let noPreview = false;
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--dry-run") dryRun = true;
 		else if (arg === "--no-action") noAction = true;
+		else if (arg === "--no-preview") noPreview = true;
 		else if (arg === "--action-desc" && argv[i + 1]) actionDesc = argv[++i];
 		else if (arg === "--action-code" && argv[i + 1]) actionCode = argv[++i];
 		else if (arg === "--action-file" && argv[i + 1]) actionFile = argv[++i];
@@ -53,16 +58,24 @@ function parseArgs(argv) {
 
 	// MẶC ĐỊNH: luôn kèm tác vụ dựng lại thế giới, trừ khi người dùng chỉ định
 	// action khác hoặc --no-action.
-	if (!actionFile && !actionCode && !noAction) {
+	const usingDefaults = !actionFile && !actionCode && !noAction;
+	if (usingDefaults) {
 		actionFile = REBUILD_ACTION_FILE;
 		actionDesc = actionDesc || "Dựng lại thế giới brige (tăng dần theo mã băm từng module)";
 	}
 
-	let extraAction = null;
-	if (actionCode) extraAction = makeActionFromCode(actionCode, actionDesc);
-	else if (actionFile) extraAction = makeActionFromFile(actionFile, actionDesc);
+	const actions = [];
+	if (actionCode) actions.push(makeActionFromCode(actionCode, actionDesc));
+	else if (actionFile) actions.push(makeActionFromFile(actionFile, actionDesc));
 
-	return { message, extraAction, dryRun };
+	// Preview UI chỉ đính kèm khi dùng bộ mặc định (không phải action tự nhập).
+	if (usingDefaults && !noPreview) {
+		actions.push(
+			makeActionFromFile(PREVIEW_ACTION_FILE, "Preview thanh tu luyện trong edit mode")
+		);
+	}
+
+	return { message, actions, dryRun };
 }
 
 function git(args) {
@@ -103,8 +116,8 @@ function assertHeadMatchesOrigin() {
 }
 
 async function main() {
-	const { message, extraAction, dryRun } = parseArgs(process.argv.slice(2));
-	const bundle = compileSyncBundle(extraAction);
+	const { message, actions, dryRun } = parseArgs(process.argv.slice(2));
+	const bundle = compileSyncBundle(actions);
 
 	console.log(`📦 Repo: ${GITHUB_OWNER}/${GITHUB_REPO} · nhánh ${GITHUB_BRANCH}`);
 	console.log(`📁 Số file Rojo: ${bundle.files.length} | Tác vụ: ${bundle.actions.length} | sync v${bundle.version}`);
@@ -115,9 +128,11 @@ async function main() {
 		throw new Error("Gói sync rỗng — kiểm tra default.project.json và src/.");
 	}
 
-	if (extraAction) {
-		const lines = extraAction.code.split("\n").length;
-		console.log(`🏗  Tác vụ: ${extraAction.id} — "${extraAction.description}" (${lines} dòng)`);
+	if (actions.length > 0) {
+		for (const action of actions) {
+			const lines = action.code.split("\n").length;
+			console.log(`🏗  Tác vụ: ${action.id} — "${action.description}" (${lines} dòng)`);
+		}
 	} else {
 		console.warn("⚠️  Gói sync KHÔNG có tác vụ nào (--no-action) → Studio chỉ nhận script.");
 	}

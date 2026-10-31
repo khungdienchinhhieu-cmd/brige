@@ -1,22 +1,27 @@
 --!strict
 --[[
-	CultivationBar — thanh tiến độ tu luyện kiểu thanh kinh nghiệm.
+	CultivationBarView — THANH TIẾN ĐỘ TU LUYỆN dùng chung cho 2 nơi:
+
+		1. Client trong game (src/client/Init.client.luau) → người chơi thấy khi Play.
+		2. Preview trong Studio edit mode (bridge/preview_cultivation_action.luau)
+		   → chỉnh sửa UI là thấy ngay, KHÔNG cần bấm Play.
+
+	Vì dùng chung một code nên preview trong edit mode giống hệt lúc chơi.
 
 	Bố cục (góc dưới giữa màn hình):
 		┌──────────────────────────────────────────────┐
 		│  Trúc Cơ · Tầng 3                12.4K / 24.3K│
 		│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░  51%         │
-		│  +33 khí/giây            [ Bế quan ]          │
+		│  +33 khí/giây            [ Bế quan ×2 ]       │
 		└──────────────────────────────────────────────┘
 
-	Màu thanh + hiệu ứng sáng đổi theo cảnh giới (Luyện Khí lam → Hoá Thần đỏ).
-	Khi sang cảnh giới mới, chữ bật to + phóng to rồi thu về (hiệu ứng đột phá).
+	Ngoài RenderStepped có `:setSnapshot(...)` để cập nhật thủ công (preview gọi mỗi 0.2s).
 ]]
 
 local TweenService = game:GetService("TweenService")
 
-local CultivationBar = {}
-CultivationBar.__index = CultivationBar
+local CultivationBarView = {}
+CultivationBarView.__index = CultivationBarView
 
 export type Snapshot = {
 	realm: number,
@@ -37,22 +42,21 @@ export type Snapshot = {
 	realmGlow: Color3,
 }
 
-export type CultivationBar = {
-	gui: ScreenGui,
+export type BarView = {
+	gui: Instance,
 	root: Frame,
 	header: TextLabel,
 	counter: TextLabel,
 	fill: Frame,
 	fillGradient: UIGradient,
-	shine: Frame,
 	percent: TextLabel,
 	rateLabel: TextLabel,
 	secludedBtn: TextButton,
 	onSecludedToggle: (() -> ())?,
 	lastRealm: number,
 	lastStage: number,
-	destroy: (self: CultivationBar) -> (),
-	setSnapshot: (self: CultivationBar, snapshot: Snapshot) -> (),
+	destroy: (self: BarView) -> (),
+	setSnapshot: (self: BarView, snapshot: Snapshot) -> (),
 }
 
 local function formatQi(value: number): string
@@ -71,26 +75,24 @@ local function corner(parent: Instance, radius: number): UICorner
 	return c
 end
 
-function CultivationBar.new(playerGui: PlayerGui): CultivationBar
-	local self = (setmetatable({}, CultivationBar) :: any) :: CultivationBar
+--[[
+	Tạo thanh tiến độ.
+	`parent` là nơi chứa: thường là ScreenGui của người chơi, hoặc CoreGui (preview).
+]]
+function CultivationBarView.new(parent: Instance): BarView
+	local self = (setmetatable({}, CultivationBarView) :: any) :: BarView
 	self.lastRealm = 0
 	self.lastStage = 0
 
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "BrigeCultivation"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
-	gui.Parent = playerGui
-
 	local root = Instance.new("Frame")
-	root.Name = "Panel"
+	root.Name = "CultivationPanel"
 	root.AnchorPoint = Vector2.new(0.5, 1)
 	root.Position = UDim2.new(0.5, 0, 1, -18)
 	root.Size = UDim2.fromOffset(460, 96)
 	root.BackgroundColor3 = Color3.fromRGB(14, 17, 24)
 	root.BackgroundTransparency = 0.08
 	root.BorderSizePixel = 0
-	root.Parent = gui
+	root.Parent = parent
 	corner(root, 12)
 
 	local stroke = Instance.new("UIStroke")
@@ -106,7 +108,6 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 	pad.PaddingRight = UDim.new(0, 14)
 	pad.Parent = root
 
-	-- hàng 1: tên cảnh giới · tầng          khí hiện tại / cần
 	local header = Instance.new("TextLabel")
 	header.Name = "Header"
 	header.BackgroundTransparency = 1
@@ -130,7 +131,6 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 	counter.Text = "0 / 120"
 	counter.Parent = root
 
-	-- hàng 2: thanh tiến độ
 	local track = Instance.new("Frame")
 	track.Name = "Track"
 	track.Position = UDim2.fromOffset(0, 26)
@@ -155,7 +155,6 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 	})
 	fillGradient.Parent = fill
 
-	-- vệt sáng chạy trong phần đã đầy
 	local shine = Instance.new("Frame")
 	shine.Name = "Shine"
 	shine.Size = UDim2.new(0.18, 0, 1, 0)
@@ -164,15 +163,13 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 	shine.BorderSizePixel = 0
 	shine.Parent = fill
 
+	-- vệt sáng chạy; loop quanh object nên tự chết khi thanh bị destroy
 	task.spawn(function()
 		while shine.Parent ~= nil do
 			shine.Position = UDim2.fromScale(-0.3, 0)
-			local tween = TweenService:Create(
-				shine,
-				TweenInfo.new(1.6, Enum.EasingStyle.Linear),
-				{ Position = UDim2.fromScale(1.1, 0) }
-			)
-			tween:Play()
+			TweenService:Create(shine, TweenInfo.new(1.6, Enum.EasingStyle.Linear), {
+				Position = UDim2.fromScale(1.1, 0),
+			}):Play()
 			task.wait(1.9)
 		end
 	end)
@@ -190,7 +187,6 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 	percent.ZIndex = 3
 	percent.Parent = root
 
-	-- hàng 3: tốc độ + nút bế quan
 	local rateLabel = Instance.new("TextLabel")
 	rateLabel.Name = "Rate"
 	rateLabel.BackgroundTransparency = 1
@@ -224,40 +220,39 @@ function CultivationBar.new(playerGui: PlayerGui): CultivationBar
 		end
 	end)
 
-	self.gui = gui
 	self.root = root
 	self.header = header
 	self.counter = counter
 	self.fill = fill
 	self.fillGradient = fillGradient
-	self.shine = shine
 	self.percent = percent
 	self.rateLabel = rateLabel
 	self.secludedBtn = secludedBtn
+	self.gui = parent
 	return self
 end
 
-function CultivationBar.setSnapshot(self: CultivationBar, snapshot: Snapshot)
+function CultivationBarView.setSnapshot(self: BarView, snapshot: Snapshot)
 	self.header.Text = snapshot.stageLabel
-	self.counter.Text = string.format(
-		"%s / %s",
-		formatQi(snapshot.qi),
-		formatQi(snapshot.required)
-	)
-	self.percent.Text = if snapshot.isMax
-		then "ĐỈNH PHONG"
-		else string.format("%d%%", math.floor(snapshot.progress * 100))
+	self.counter.Text = string.format("%s / %s", formatQi(snapshot.qi), formatQi(snapshot.required))
+	if snapshot.isMax then
+		self.percent.Text = "ĐỈNH PHONG"
+	else
+		self.percent.Text = string.format("%d%%", math.floor(snapshot.progress * 100))
+	end
 
-	TweenService:Create(
-		self.fill,
-		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.Direction.Out),
-		{ Size = UDim2.fromScale(snapshot.progress, 1) }
-	):Play()
+	TweenService:Create(self.fill, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.Direction.Out), {
+		Size = UDim2.fromScale(snapshot.progress, 1),
+	}):Play()
 
-	self.rateLabel.Text = if snapshot.isMax
-		then "Đã đạt Hoá Thần tầng 9 — đỉnh cao tu tiên"
-		else string.format("+%d khí/giây%s", math.floor(snapshot.rate), if snapshot.secluded then " · bế quan" else "")
-	self.rateLabel.TextColor3 = if snapshot.isMax then snapshot.realmGlow else Color3.fromRGB(110, 231, 183)
+	if snapshot.isMax then
+		self.rateLabel.Text = "Đã đạt Hoá Thần tầng 9 — đỉnh cao tu tiên"
+		self.rateLabel.TextColor3 = snapshot.realmGlow
+	else
+		local suffix = if snapshot.secluded then " · bế quan" else ""
+		self.rateLabel.Text = string.format("+%d khí/giây%s", math.floor(snapshot.rate), suffix)
+		self.rateLabel.TextColor3 = Color3.fromRGB(110, 231, 183)
+	end
 
 	-- đổi màu theo cảnh giới
 	self.fillGradient.Color = ColorSequence.new({
@@ -269,25 +264,24 @@ function CultivationBar.setSnapshot(self: CultivationBar, snapshot: Snapshot)
 		rootStroke.Color = snapshot.realmColor
 	end
 
-	self.secludedBtn.Text = if snapshot.secluded then "Xuất quan" else "Bế quan ×2"
-	self.secludedBtn.BackgroundColor3 = if snapshot.secluded
-		then Color3.fromRGB(16, 185, 129)
-		else Color3.fromRGB(37, 99, 235)
+	if snapshot.secluded then
+		self.secludedBtn.Text = "Xuất quan"
+		self.secludedBtn.BackgroundColor3 = Color3.fromRGB(16, 185, 129)
+	else
+		self.secludedBtn.Text = "Bế quan ×2"
+		self.secludedBtn.BackgroundColor3 = Color3.fromRGB(37, 99, 235)
+	end
 
-	-- hiệu ứng đột phá: sang cảnh giới mới thì bật to rồi thu về
+	-- hiệu ứng đột phá
 	if self.lastRealm > 0 and snapshot.realm > self.lastRealm then
 		self.header.TextColor3 = snapshot.realmGlow
-		self.header.Size = UDim2.new(0.62, 0, 0, 20)
-		TweenService:Create(
-			self.header,
-			TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.Direction.Out),
-			{ TextSize = 22 }
-		):Play()
+		TweenService:Create(self.header, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.Direction.Out), {
+			TextSize = 22,
+		}):Play()
 		task.delay(1.2, function()
 			TweenService:Create(self.header, TweenInfo.new(0.4), { TextSize = 15 }):Play()
 		end)
 	elseif self.lastStage > 0 and snapshot.stage > self.lastStage then
-		-- lên tầng: nháy nhẹ
 		self.header.TextColor3 = Color3.fromRGB(255, 255, 255)
 		task.delay(0.4, function()
 			self.header.TextColor3 = Color3.fromRGB(240, 245, 255)
@@ -298,8 +292,12 @@ function CultivationBar.setSnapshot(self: CultivationBar, snapshot: Snapshot)
 	self.lastStage = snapshot.stage
 end
 
-function CultivationBar.destroy(self: CultivationBar)
-	self.gui:Destroy()
+function CultivationBarView.destroy(self: BarView)
+	local parent = self.root.Parent
+	self.root:Destroy()
+	if parent and parent.Name == "BrigeCultivationPreview" then
+		parent:Destroy()
+	end
 end
 
-return CultivationBar
+return CultivationBarView

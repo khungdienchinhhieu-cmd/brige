@@ -243,26 +243,45 @@ local function markExecutedAction(actionId)
 	end)
 end
 
-local function runQueuedActions(actions)
+--[[
+	Khoá chống chạy trùng.
+	Trước đây dùng mỗi `action.id` → tác vụ dựng thế giới có id cố định (băm từ nội dung
+	file action), nên sau lần sync ĐẦU TIÊN nó không bao giờ chạy lại: script mới được ghi
+	nhưng map đứng yên → "cập nhật không được".
+
+	Giờ khoá = `<action.id>@<hash của gói>`:
+		• hash gói đổi (có nội dung mới)  → chạy lại đúng 1 lần
+		• sync lại y nguyên               → bỏ qua (không tốn thời gian)
+		• action.once == true             → chỉ chạy 1 lần duy nhất, mãi mãi
+]]
+local function actionRunKey(action, bundleKey)
+	if action.once == true then
+		return tostring(action.id)
+	end
+	return tostring(action.id) .. "@" .. tostring(bundleKey or "")
+end
+
+local function runQueuedActions(actions, bundleKey)
 	if type(actions) ~= "table" then
 		return 0
 	end
 	local executedCount = 0
 	for _, action in ipairs(actions) do
 		if type(action) == "table" and action.id and type(action.code) == "string" then
-			if not hasExecutedAction(action.id) then
-				markExecutedAction(action.id)
+			local runKey = actionRunKey(action, bundleKey)
+			if not hasExecutedAction(runKey) then
+				markExecutedAction(runKey)
 				local fn, compileErr = loadstring(action.code, "=ArenaAction_" .. tostring(action.id))
 				if not fn then
-					warn("[Arena Bridge] Lỗi biên dịch Action " .. tostring(action.id) .. ": " .. tostring(compileErr))
+					warn("[brige Bridge] Lỗi biên dịch Action " .. tostring(action.id) .. ": " .. tostring(compileErr))
 				else
 					local desc = tostring(action.description or action.id)
 					local okRun, runErr = withUndoRecording(desc, fn)
 					if okRun then
 						executedCount += 1
-						print("[Arena Bridge] ✨ Đã thực thi tác vụ AI: " .. desc)
+						print("[brige Bridge] ✨ Đã thực thi tác vụ: " .. desc)
 					else
-						warn("[Arena Bridge] Lỗi khi chạy tác vụ '" .. desc .. "': " .. tostring(runErr))
+						warn("[brige Bridge] Lỗi khi chạy tác vụ '" .. desc .. "': " .. tostring(runErr))
 					end
 				end
 			end
@@ -294,7 +313,7 @@ local function applyBundle(bundle)
 	end
 
 	local tAfterInject = os.clock()
-	local ranActions = runQueuedActions(bundle.actions)
+	local ranActions = runQueuedActions(bundle.actions, bundle.hash)
 	local tAfterActions = os.clock()
 
 	state.syncedVersion = tonumber(bundle.version) or state.syncedVersion
