@@ -95,17 +95,16 @@ async function withPreviewSnapshot(action, realm, stage, qiPercent) {
 		const state = Cultivation.newState(realm, stage);
 		state.qi = Cultivation.requirement(state) * (qiPercent / 100);
 		const snapshot = Cultivation.snapshot(state);
-		const literal = JSON.stringify(
-			{
-				realm: snapshot.realm,
-				stage: snapshot.stage,
-				qi: snapshot.qi,
-				required: snapshot.required,
-				progress: snapshot.progress,
-			},
-			null,
-			0
-		);
+		// PHẢI là cú pháp bảng Lua (key = value), không phải JSON: code này được
+		// loadstring() trong Studio nên {"realm":1} sẽ là lỗi cú pháp.
+		const fields = [
+			["realm", snapshot.realm],
+			["stage", snapshot.stage],
+			["qi", snapshot.qi],
+			["required", snapshot.required],
+			["progress", Number(snapshot.progress.toFixed(4))],
+		];
+		const literal = `{ ${fields.map(([k, v]) => `${k} = ${v}`).join(", ")} }`;
 		const code = String(action.code)
 			.replace('local PREVIEW_MODEL = "loop"', 'local PREVIEW_MODEL = "snap"')
 			.replace("local PREVIEW_SNAPSHOT = nil", `local PREVIEW_SNAPSHOT = ${literal}`);
