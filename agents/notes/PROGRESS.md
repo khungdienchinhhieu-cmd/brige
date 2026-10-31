@@ -35,3 +35,13 @@ Cập nhật: 2026-10-31 · nhánh `arena/caf04b02-brige`
 
 Lưu ý private repo: `raw.githubusercontent.com` không phục vụ repo private, nên dòng
 Command Bar chỉ chạy khi repo được đổi sang public. Đường ống không có lỗi gì khác.
+
+## Mốc 2 — chuẩn bị môi trường local (Rojo)
+
+- [x] `rokit.toml` ghim `rojo 7.7.1`; `tools/rojo/setup.sh` cài tự động.
+- [x] `tools/rojo/serve.mjs` — preflight (rojo trong PATH, project JSON hợp lệ, `$path` tồn tại,
+      đếm file `src/`) rồi mới `rojo serve --address 0.0.0.0 --port 34872`; có `--build`, `--check`.
+- [x] `.luaurc` thêm alias `shared` → `src/shared` cho LSP.
+- [ ] Đổi repo sang public: **bị chặn** — token hiện tại là GitHub App integration, API trả
+      `403 Resource not accessible by integration`. Cần người dùng chạy `gh repo edit --visibility public`
+      trên máy có quyền, hoặc Settings → General → Danger Zone → Change visibility.
