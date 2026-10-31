@@ -137,14 +137,24 @@ async function main() {
 
 	// Chỉ đổi updatedAt khi nội dung đổi → publish lại y nguyên không sinh commit rỗng.
 	if (prevBody !== null && JSON.parse(prevBody).hash === bundle.hash) {
-		const committedSha = git(["rev-parse", "HEAD"]);
-		bundle.version = JSON.parse(prevBody).version;
-		bundle.updatedAt = JSON.parse(prevBody).updatedAt;
+		const prev = JSON.parse(prevBody);
+		bundle.version = prev.version;
+		bundle.updatedAt = prev.updatedAt;
 		fs.writeFileSync(SYNC_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", "utf8");
-		console.log(
-			`ℹ️  Nội dung không đổi (hash ${bundle.hash.slice(0, 12)}…) — không tạo commit mới.`
-		);
-		console.log(`🔗 Lệnh Command Bar (commit hiện tại):\n${buildGitHubCommandBarOneLiner(committedSha)}`);
+		console.log(`ℹ️  Gói sync không đổi (hash ${bundle.hash.slice(0, 12)}…, v${bundle.version}).`);
+
+		// Gói không đổi nhưng vẫn có thể có thay đổi ngoài src/ (docs, tools, bridge):
+		// commit chúng để repo không bị bẩn, nhưng KHÔNG tăng version.
+		git(["add", "-A"]);
+		if (git(["status", "--porcelain"])) {
+			assertHeadMatchesOrigin();
+			git(["commit", "-m", message]);
+			git(["push", "-u", "origin", GITHUB_BRANCH]);
+			console.log(`✅ Đã commit thay đổi ngoài src/ (${GITHUB_BRANCH} @ ${git(["rev-parse", "HEAD"]).slice(0, 7)})`);
+		} else {
+			console.log("ℹ️  Không có gì để commit.");
+		}
+		console.log(`🔗 Lệnh Command Bar:\n${buildGitHubCommandBarOneLiner(git(["rev-parse", "HEAD"]))}`);
 		return;
 	}
 

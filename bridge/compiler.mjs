@@ -216,8 +216,11 @@ export function compileSyncBundle(extraAction = null) {
 	const prev = loadExistingBundle();
 	const actions = Array.isArray(prev.actions) ? [...prev.actions] : [];
 	if (extraAction) {
+		// id băm từ nội dung: nếu đã có action y hệt thì GIỮ bản cũ (createdAt ổn định),
+		// nhờ vậy publish lặp lại không làm đổi hash/version.
+		const previous = actions.find((a) => a.id === extraAction.id);
 		const deduped = actions.filter((a) => a.id !== extraAction.id);
-		deduped.push(extraAction);
+		deduped.push(previous || extraAction);
 		actions.length = 0;
 		actions.push(...deduped);
 		if (actions.length > 50) {
