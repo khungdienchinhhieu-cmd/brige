@@ -1,0 +1,25 @@
+# File place được build từ Rojo
+/brige.rbxlx
+/brige.rbxl
+/*.rbxlx
+/*.rbxl
+
+# File lock của Roblox Studio
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Sourcemap của Luau LSP / Rojo
+sourcemap.json
+
+# Thư mục thư viện Wally (nếu dùng sau này)
+/Packages/
+/ServerPackages/
+/DevPackages/
+
+# Trạng thái + cảnh báo của tools/watch/file_watch.mjs
+/tools/watch/.state/
+
+# Bí mật — TUYỆT ĐỐI không commit
+.env
+.env.*
+*.token
