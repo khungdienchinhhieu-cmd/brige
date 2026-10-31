@@ -132,7 +132,23 @@ async function main() {
 
 	assertHeadMatchesOrigin();
 
-	fs.writeFileSync(SYNC_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", "utf8");
+	const nextBody = JSON.stringify(bundle, null, 2) + "\n";
+	const prevBody = fs.existsSync(SYNC_BUNDLE_FILE) ? fs.readFileSync(SYNC_BUNDLE_FILE, "utf8") : null;
+
+	// Chỉ đổi updatedAt khi nội dung đổi → publish lại y nguyên không sinh commit rỗng.
+	if (prevBody !== null && JSON.parse(prevBody).hash === bundle.hash) {
+		const committedSha = git(["rev-parse", "HEAD"]);
+		bundle.version = JSON.parse(prevBody).version;
+		bundle.updatedAt = JSON.parse(prevBody).updatedAt;
+		fs.writeFileSync(SYNC_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", "utf8");
+		console.log(
+			`ℹ️  Nội dung không đổi (hash ${bundle.hash.slice(0, 12)}…) — không tạo commit mới.`
+		);
+		console.log(`🔗 Lệnh Command Bar (commit hiện tại):\n${buildGitHubCommandBarOneLiner(committedSha)}`);
+		return;
+	}
+
+	fs.writeFileSync(SYNC_BUNDLE_FILE, nextBody, "utf8");
 
 	// add -A: mã nguồn, tài liệu và gói sync đi cùng 1 commit → nội dung repo luôn
 	// khớp đúng gói mà Studio tải về. File rác đã bị .gitignore chặn.
