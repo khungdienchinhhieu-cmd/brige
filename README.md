@@ -53,23 +53,50 @@ Số liệu nằm **toàn bộ** ở `src/shared/CultivationConfig.luau` — s�
 
 ---
 
-## 1b. Xem ngay trong Studio mà KHÔNG cần bấm Play
+## 1b. UI tu luyện v2 + xem ngay không cần Play
 
-Mỗi lần publish, gói sync có **2 tác vụ**:
+**Không dựng map nữa.** Mỗi lần publish, gói sync chỉ mang **1 tác vụ: preview UI** —
+không tạo/xoá bất kỳ part nào trong `Workspace`.
 
-| Tác vụ | Việc |
+Dán lệnh Command Bar → thanh tu luyện hiện ngay ở đáy màn hình trong **edit mode**
+(`CoreGui.BrigeCultivationPreview`), **không cần bấm Play, không cần Start Client**.
+
+| Nút | Việc |
 | --- | --- |
-| `rebuild_world_action.luau` | dựng lại `Workspace.BrigeWorld` (đài + 5 trụ cảnh giới) |
-| `preview_cultivation_action.luau` | hiện **thanh tu luyện ngay trong edit mode** ở `CoreGui.BrigeCultivationPreview` |
+| `◀ Tầng trước` / `Tầng sau ▶` | nhảy xem hình thức từng cảnh giới (45 tầng) |
+| `Tự chạy: BẬT/TẮT` | mô phỏng tu luyện tốc độ thật (1s = 1s) |
+| `Tốc độ ×1 / ×10 / ×60` | ×1 = tốc độ thật; muốn nhanh thì dùng nút chuyển tầng |
 
-Sau khi dán lệnh Command Bar, bạn thấy ngay thanh tiến độ ở đáy màn hình — **không cần Play,
-không cần mở client**. Preview còn tự mô phỏng tu luyện tua ×2400 nên chạy hết 45 tầng trong
-~30 giây để xem đủ 5 cảnh giới đổi màu. Có nút "Tạm dừng tua" và "Về tầng 1".
+Bản trước tua ×2400 nên thanh **nhảy liên tục** mỗi frame — đó là lý do bạn thấy giật.
+Giờ preview chạy đúng tốc độ thật, muốn xem cảnh giới cao thì bấm chuyển tầng.
 
-Thanh này dùng **chung một file** với thanh trong game (`src/shared/UI/CultivationBarView.luau`),
-nên sửa UI là preview đổi y hệt lúc chơi. Bấm Play thì preview tự nhường cho thanh thật của client.
+### Xem đúng cảnh giới bạn muốn chỉnh
 
-> Nếu muốn tắt preview: `node bridge/publish.mjs --no-preview "msg"`.
+`publish.mjs` nhúng state thật vào action preview:
+
+```bash
+node bridge/publish.mjs --realm 4 --stage 7 --qi 82 "feat: chỉnh UI Nguyên Anh"
+#                        ↑ cảnh 4 (Nguyên Anh)  ↑ tầng 7   ↑ 82% thanh
+```
+
+Publish xong, Studio hiện đúng Nguyên Anh · Tầng 7 với thanh 82% (thanh đứng yên, tự chạy TẮT).
+
+### Thanh v2 có gì mới
+
+Thanh này dùng **chung một file** với thanh trong game (`src/shared/UI/CultivationBarView.luau`)
+nên sửa UI là cả preview và lúc chơi đổi giống nhau.
+
+- **Mượt**: cập nhật theo từng frame (`RunService.Heartbeat`) + nội suy, không nhảy theo từng giây.
+- **Chống giật**: mọi Tween đang chạy bị huỷ trước khi tạo cái mới (v1 tạo tween mới mỗi giây
+  trong khi tween cũ chưa xong → rung).
+- **Vạch chia 9 tầng** ngay trong thanh → thấy đang ở nhịp nào của cảnh giới.
+- **Đột phá**: flash sáng + chữ phóng to rồi thu về; sang cảnh giới mới thì mạnh hơn.
+- **Tự mờ** khi không thao tác (0.55), rê chuột vào sáng lại → không che màn hình.
+- Màu thanh, viền, nút đều đổi theo cảnh giới; hiện `ĐỈNH PHONG` ở mốc cuối.
+
+> Tắt preview: `node bridge/publish.mjs --no-preview "msg"`.
+> Cần dựng lại thế giới (khi nào thật sự cần):
+> `node bridge/publish.mjs --action-file bridge/rebuild_world_action.luau "msg"`.
 
 ---
 
@@ -97,11 +124,13 @@ bridge/
   compiler.mjs                  # đóng gói src/ thành studio-sync.json (hash, version, actions)
   publish.mjs                   # publish: ghi gói, commit, push, in lệnh Command Bar (có --dry-run)
   rebuild_world_action.luau     # tác vụ dựng lại Workspace.BrigeWorld
-  preview_cultivation_action.luau # tác vụ preview UI trong edit mode
+  preview_cultivation_action.luau # tác vụ DUY NHẤT mặc định: preview UI edit mode
+  rebuild_world_action.luau     # dựng thế giới — KHÔNG còn tự chạy, chỉ khi --action-file
 plugin/StudioLiveBridge.server.luau   # plugin Studio: tải gói theo commit SHA
 tools/
   sync_sim/check_bundle.cjs     # kiểm gói sync so với repo (PASS/FAIL)
   cultivation_sim/run.mjs       # ★ mô phỏng & kiểm cân bằng tu luyện, KHÔNG cần Studio
+  cultivation_sim/luau_loader.mjs # dịch .luau → JS (dùng bởi run.mjs và publish.mjs)
   watch/file_watch.mjs          # theo dõi GitHub bằng gh api
 agents/notes/                   # kiến trúc + tiến độ
 agents/prompts/                 # prompt cho agent khác
@@ -146,7 +175,10 @@ số lần đột phá sai, tràn số, snapshot thiếu trường cho UI. Vì v
 
 ---
 
-## 5. Bảng toạ độ (Workspace.BrigeWorld)
+## 5. Bảng toạ độ (Workspace.BrigeWorld) — map KHÔNG tự dựng nữa
+
+> `SectGrounds.luau` vẫn còn trong repo để dùng sau này, nhưng publish mặc định **không**
+> chạy tác vụ dựng map. Muốn dựng: thêm `--action-file bridge/rebuild_world_action.luau`.
 
 | Vật thể | Toạ độ (studs) | Ghi chú |
 | --- | --- | --- |

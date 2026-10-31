@@ -116,7 +116,11 @@ function flattenSources(node, prefix, out) {
       !a.code.includes("BrigeCultivationPreview")
   );
   if (rebuild.length === 0) {
-    bad(`Gói có ${actions.length} tác vụ nhưng KHÔNG có tác vụ dựng lại thế giới → Studio nhận script nhưng map không đổi.`);
+    // Mặc định hiện tại: KHÔNG dựng map (chỉ preview UI). Đây là chủ ý, không phải lỗi.
+    warn(
+      `Gói không có tác vụ dựng lại thế giới (chủ ý — chỉ đồng bộ script + UI). ` +
+        `Cần dựng map thì: node bridge/publish.mjs --action-file bridge/rebuild_world_action.luau "msg"`
+    );
   } else {
     const latest = rebuild[rebuild.length - 1];
     ok(`Có ${rebuild.length} tác vụ dựng lại thế giới (mới nhất: ${latest.id})`);
@@ -132,12 +136,34 @@ function flattenSources(node, prefix, out) {
       }
     }
 
-    // Preview edit mode phải có mặt (để xem UI mà không cần Play)
-    const preview = actions.filter((a) => typeof a.code === "string" && a.code.includes("BrigeCultivationPreview"));
-    if (preview.length === 0) {
-      warn("Gói KHÔNG có action preview edit mode — chỉ xem được UI sau khi bấm Play.");
+  }
+
+  // 3b. Preview edit mode — kiểm riêng, không phụ thuộc có dựng map hay không
+  const preview = actions.filter((a) => typeof a.code === "string" && a.code.includes("BrigeCultivationPreview"));
+  if (preview.length === 0) {
+    warn("Gói KHÔNG có action preview edit mode — chỉ xem được UI sau khi bấm Play.");
+  } else {
+    const code = preview[preview.length - 1].code;
+    ok(`có action preview edit mode (${preview[preview.length - 1].id}) — xem UI không cần Play`);
+    if (/Instance\.new\("Part"\)|Instance\.new\("Folder"\)|\.Parent = workspace/.test(code)) {
+      bad("Action preview có dựng/xoá Instance trong Workspace — phải chỉ là UI.");
     } else {
-      ok(`có action preview edit mode (${preview[preview.length - 1].id}) — xem UI không cần Play`);
+      ok("action preview chỉ vẽ UI, không đụng Workspace");
+    }
+    if (!code.includes("Heartbeat") && !code.includes("RenderStepped")) {
+      bad("Action preview không dùng Heartbeat/RenderStepped → thanh nhảy từng giây (giật).");
+    } else {
+      ok("preview cập nhật theo từng frame (Heartbeat) → mượt, không giật");
+    }
+    const hugeSpeed = code.match(/SPEED\s*=\s*(\d+)/);
+    if (hugeSpeed && Number(hugeSpeed[1]) > 60) {
+      bad(`Preview tua ×${hugeSpeed[1]} → thanh nhảy liên tục. Tối đa ×60.`);
+    }
+    // phải có điều khiển để xem nhanh từng cảnh giới thay vì tua
+    if (!code.includes("previewStateAt") && !code.includes("Tầng sau")) {
+      warn("Preview thiếu nút chuyển tầng — muốn xem cảnh giới cao phải chờ.");
+    } else {
+      ok("preview có nút chuyển tầng để xem nhanh cảnh giới");
     }
   }
 
@@ -196,7 +222,7 @@ function flattenSources(node, prefix, out) {
   for (const p of problems) console.log(`  ❌ ${p}`);
   console.log(
     problems.length === 0
-      ? "\nPASS — gói sync dùng được: Studio sẽ nạp script mới và dựng lại thế giới."
+      ? "\nPASS — gói sync dùng được: Studio nạp script mới và hiện UI ngay trong edit mode."
       : `\nFAIL — ${problems.length} lỗi trong gói sync.`
   );
   process.exit(problems.length === 0 ? 0 : 1);

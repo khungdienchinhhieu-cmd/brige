@@ -94,3 +94,28 @@ Sửa: khoá = `<action.id>@<bundle.hash>`; `action.once = true` để ghim ch�
 
 Test cũ chỉ kiểm *nội dung gói*, không kiểm *plugin có chạy tác vụ hay không*. Đã bổ sung.
 Lần sau thêm cơ chế mới thì luôn thêm một mục kiểm tra tương ứng vào `check_bundle.cjs`.
+
+## Mốc 5 — UI v2 mượt + bỏ dựng map
+
+### Vì sao thanh "giật tăng liên tục"
+
+Preview bản trước tua **×2400** rồi cộng thêm tween 0.35s tạo mới mỗi frame ⇒ thanh vừa
+nhảy liên tục vừa tranh nhau với tween cũ. Sửa:
+
+- Preview chạy **tốc độ thật** (1s = 1s); muốn xem cảnh giới cao thì bấm nút chuyển tầng.
+- Thanh cập nhật theo `RunService.Heartbeat` + **nội suy** thay vì tween mỗi lần có dữ liệu.
+
+### Theo yêu cầu "không cần xây gì hết"
+
+- `publish.mjs` mặc định **chỉ** đính kèm tác vụ preview UI; bỏ hẳn tác vụ dựng thế giới.
+- `compiler.mjs` đổi sang **replace** semantics: gói chỉ mang tác vụ của lần publish này
+  (trước đó cộng dồn lịch sử nên tác vụ dựng map cũ nằm mãi trong gói).
+- `SectGrounds.luau` + `rebuild_world_action.luau` giữ lại nhưng không tự chạy.
+
+### Nâng cấp UI v2
+
+- Vạch chia 9 tầng trong thanh · màu theo cảnh giới cho cả viền/nút/chữ.
+- Flash + chữ phóng to khi đột phá (mạnh hơn khi sang cảnh giới mới).
+- Tự mờ khi không thao tác, rê chuột sáng lại.
+- `publish.mjs --realm N --stage M --qi P` → nhúng state thật để xem đúng cảnh giới cần chỉnh.
+- `tools/cultivation_sim/luau_loader.mjs` dùng chung cho `run.mjs` và `publish.mjs`.
