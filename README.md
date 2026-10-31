@@ -4,7 +4,7 @@
 `khungdienchinhhieu-cmd/RobloxStudio-connecting` nhưng **không phụ thuộc** vào nó:
 mọi thông tin repo/nhánh lấy từ chính checkout này.
 
-- Repo: `khungdienchinhhieu-cmd/brige` · **public** (bắt buộc để raw CDN phục vụ `studio-sync.json`; đổi ngày 2026-10-31)
+- Repo: `khungdienchinhhieu-cmd/brige` · **cần public** để raw CDN phục vụ `studio-sync.json` (hiện vẫn private — xem mục 6)
 - Nhánh mặc định: `main` · Nhánh làm việc: `arena/caf04b02-brige`
 - Thể loại game: **chưa chốt** → hiện tại repo dựng **Sync Yard**, một sân thử để chứng minh
   toàn bộ đường ống `src/ → studio-sync.json → Studio` chạy đúng trước khi chọn hướng game.
@@ -12,7 +12,7 @@ mọi thông tin repo/nhánh lấy từ chính checkout này.
 ## 1. Cấu trúc
 
 ```text
-default.project.json            # Rojo: map src/ vào ReplicatedStorage, ServerScriptService, StarterPlayer
+default.project.json            # bản đồ src/ → ReplicatedStorage, ServerScriptService, StarterPlayer
 src/
   client/                       # LocalScript + ModuleScript phía client
     Init.client.luau            # điểm vào client, dựng HUD
@@ -35,13 +35,10 @@ plugin/
 tools/
   sync_sim/check_bundle.cjs     # kiểm gói so với repo (PASS/FAIL)
   watch/file_watch.mjs          # theo dõi GitHub bằng gh api, ghi cảnh báo
-  rojo/serve.mjs                # chạy rojo serve kèm preflight (cổng 34872)
-  rojo/setup.sh                 # cài Rokit + Rojo theo rokit.toml
 agents/
   notes/                        # kiến trúc + tiến độ
   prompts/                      # prompt cho agent khác
 studio-sync.json                # SINH RA bởi publish.mjs (không sửa tay)
-rokit.toml                      # ghim rojo 7.7.1 (rokit install)
 .gitignore                      # chặn .rbxl, .rbxlx, .rbxl.lock, sourcemap.json, Packages/
 .luaurc                         # strict mode
 ```
@@ -56,6 +53,10 @@ node bridge/cli.mjs                        # xem version/hash/số file của g�
 ```
 
 Yêu cầu: Node 18+ (đã test Node 22), `git`, `gh` đã đăng nhập.
+
+**Không cần Rojo, Rokit, hay bất kỳ CLI Roblox nào.** `default.project.json` chỉ là *bản đồ*
+đường dẫn → service, do `bridge/compiler.mjs` tự đọc; plugin trong Studio cũng tự tạo
+Folder/Script từ dữ liệu đó. Studio chỉ cần `HttpEnabled = true`.
 
 ## 3. Quy trình đồng bộ Arena → Studio
 
@@ -72,7 +73,7 @@ Yêu cầu: Node 18+ (đã test Node 22), `git`, `gh` đã đăng nhập.
 4. Plugin tải `studio-sync.json` **theo đúng SHA** (không dính cache CDN), ghi Source vào
    `ReplicatedStorage.Shared`, `ServerScriptService.Server`, `StarterPlayer.StarterPlayerScripts.Client`,
    rồi chạy tác vụ dựng lại `Workspace.BrigeWorld`.
-5. Xem cửa sổ Output: `[brige Bridge] ✅ Đồng bộ thành công Rojo v…` là xong.
+5. Xem cửa sổ Output: `[brige Bridge] ✅ Đồng bộ thành công Rojo v…` (plugin vẫn dùng chữ "Rojo" trong log) là xong.
 
 > **Bắt buộc**: repo đang **private**, nên `HttpEnabled` + raw CDN chỉ đọc được nếu repo
 > **public**. Nếu muốn giữ private, xem mục 7 (Cách B).
@@ -88,50 +89,7 @@ Yêu cầu: Node 18+ (đã test Node 22), `git`, `gh` đã đăng nhập.
 | Cổng vào | `z = +116` | `GateLeft (-14, 10, 116)`, `GateRight (14, 10, 116)`, `GateBeam (0, 21.5, 116)` |
 | `Baseplate` | `(0, -10, 0)` | 512 × 20 × 512 trong `default.project.json` |
 
-## 4. Chạy local bằng Rojo (không cần publish, không cần mạng)
-
-Dùng khi muốn xem/sửa nhanh trong Studio mà không qua `studio-sync.json`.
-
-**Cài Rojo một lần** (macOS/Linux):
-
-```bash
-bash tools/rojo/setup.sh          # cài Rokit + rojo 7.7.1 theo rokit.toml, rồi kiểm tra
-```
-
-Windows (PowerShell):
-
-```powershell
-iwr https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.ps1 -useb | iex
-rokit install
-node tools/rojo/serve.mjs --check
-```
-
-**Chạy serve mỗi khi làm việc:**
-
-```bash
-node tools/rojo/serve.mjs               # = rojo serve, cổng 34872, bind 0.0.0.0
-node tools/rojo/serve.mjs --port 34873  # đổi cổng nếu bận
-node tools/rojo/serve.mjs --build       # chỉ build ra ./brige.rbxl (đã gitignore)
-node tools/rojo/serve.mjs --check       # chỉ kiểm tra môi trường
-```
-
-Script kiểm tra trước khi gọi rojo: rojo có trong PATH, `default.project.json` hợp lệ,
-`src/` có script, mọi `$path` trỏ đúng thư mục — sai là dừng kèm cách sửa.
-
-**Trong Studio:**
-
-1. Cài plugin Rojo (Toolbox → Manage Plugins → Rojo, hoặc kéo `Rojo.rbxm` vào Studio).
-2. Bấm nút **Rojo** trên toolbar → **Connect** → `localhost:34872`.
-3. Sửa file trong `src/` rồi `Ctrl+S` → Studio cập nhật ngay. Không cần Command Bar.
-
-| | Rojo serve (local) | studio-sync.json (CDN) |
-| --- | --- | --- |
-| Cần mạng | ❌ | ✅ |
-| Cần repo public | ❌ | ✅ (bắt buộc) |
-| Tự dựng lại thế giới | ❌ (chỉ khi script tự chạy) | ✅ (tác vụ `rebuild_world_action.luau`) |
-| Dùng khi | làm việc hằng ngày | agent sửa từ xa, xem kết quả trong Studio |
-
-## 5. Nội quy an toàn
+## 4. Nội quy an toàn
 
 - Không đưa token / mật khẩu / cookie vào repo (`.gitignore` đã chặn `.env`).
 - Lỗi xác thực git/gh → **dừng**, báo người dùng kết nối lại GitHub.
@@ -139,7 +97,7 @@ Script kiểm tra trước khi gọi rojo: rojo có trong PATH, `default.project
 - Không merge/đóng PR khi chưa được yêu cầu.
 - Không copy `studio-sync.json`, `.rbxl` hay dữ liệu lớn từ repo gốc.
 
-## 6. Cơ chế then chốt
+## 5. Cơ chế then chốt
 
 - **Ghim SHA**: lệnh Command Bar tải plugin theo commit SHA → không bao giờ nhận bản cũ từ cache.
 - **hash + version** trong `studio-sync.json` để plugin biết phải nạp lại hay không.
@@ -147,16 +105,16 @@ Script kiểm tra trước khi gọi rojo: rojo có trong PATH, `default.project
   `rebuild_world_action.luau` (id = `act-<băm nội dung>`) để dựng lại thế giới đúng một lần.
 - **strict mode** trong `.luaurc`; mọi module thế giới export `build(root, kit)`.
 
-## 7. Nếu repo bị đổi về private
+## 6. Nếu repo bị đổi về private
 
 raw.githubusercontent.com **không** trả file của repo private. Hai cách:
 
 - **Cách A (khuyến nghị)**: đổi lại public — `gh repo edit --visibility public`
   (cần quyền admin trên repo; token dạng GitHub App không đổi được visibility).
-- **Cách B (giữ private)**: dùng Rojo local ở mục 4 — `node tools/rojo/serve.mjs`,
-  rồi Connect trong Studio. Không cần raw CDN.
+- **Cách B**: vẫn publish bình thường rồi copy nội dung `studio-sync.json` vào Studio thủ công
+  (không tiện). Khuyến nghị dùng Cách A.
 
-## 8. Tiến độ
+## 7. Tiến độ
 
 Xem [`agents/notes/PROGRESS.md`](agents/notes/PROGRESS.md). Hiện tại: khung repo + đường ống
 đồng bộ hoàn chỉnh, `check_bundle` PASS; **thể loại game chưa chốt**, thế giới đang là sân thử.

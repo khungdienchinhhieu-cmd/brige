@@ -4,7 +4,7 @@
 
 | Lớp | Vai trò | Ai ghi |
 | --- | --- | --- |
-| `src/` | mã Luau thật của game (Rojo layout) | agent / người |
+| `src/` | mã Luau thật của game (layout kiểu Rojo, nhưng KHÔNG cần Rojo) | agent / người |
 | `bridge/` | đóng gói + publish + tác vụ dựng thế giới | agent |
 | `plugin/` | cầu nối trong Studio: tải gói theo SHA, áp vào DataModel | hiếm khi sửa |
 
@@ -35,7 +35,7 @@ thế giới; plugin nhớ `id` đã chạy (ServerStorage attribute) nên mỗi
 `id = act-<sha256(code)[0..12]>` → **idempotent**: cùng nội dung ⇒ cùng id ⇒ không dựng lại
 vô ích; nội dung đổi ⇒ id đổi ⇒ dựng lại.
 
-## 4. Quy ước tên file → class Roblox (giống Rojo)
+## 4. Quy ước tên file → class Roblox (compiler.mjs tự làm, không cần Rojo)
 
 | Tên file | Kết quả |
 | --- | --- |
@@ -59,3 +59,4 @@ vô ích; nội dung đổi ⇒ id đổi ⇒ dựng lại.
 - Action id băm nội dung (repo gốc dùng `Date.now()` → mỗi lần publish chạy lại vô ích).
 - `check_bundle.cjs` kiểm tra thêm repo/nhánh trong gói + plugin trỏ đúng repo.
 - Không copy `studio-sync.json`, `.rbxl`, ảnh review hay dữ liệu lớn từ repo gốc.
+- **Không dùng Rojo/Rokit**: `default.project.json` được `compiler.mjs` đọc trực tiếp, plugin tự dựng Instance.

@@ -12,7 +12,8 @@ Quy tắc bắt buộc:
 2. Sau khi sửa: `node bridge/publish.mjs --dry-run "test"` để xem số file, rồi
    `node bridge/publish.mjs "<thông điệp tiếng Việt>"`, rồi `node tools/sync_sim/check_bundle.cjs`
    — phải in PASS.
-3. Không đưa token/mật khẩu/cookie vào repo. Không `git reset --hard`. Không merge/đóng PR khi chưa được yêu cầu.
+3. Repo này KHÔNG dùng Rojo — đừng thêm rokit.toml/rojo serve. Đồng bộ chỉ qua `bridge/publish.mjs`.
+   Không đưa token/mật khẩu/cookie vào repo. Không `git reset --hard`. Không merge/đóng PR khi chưa được yêu cầu.
 4. Mỗi lần publish phải kèm tác vụ dựng lại thế giới (mặc định đã có) — nếu không, Studio nhận
    script mới nhưng map không đổi.
 5. Cập nhật `agents/notes/PROGRESS.md` sau mỗi mốc.
