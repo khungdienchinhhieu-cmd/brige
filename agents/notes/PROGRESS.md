@@ -44,3 +44,30 @@ Command Bar chỉ chạy khi repo được đổi sang public. Đường ống k
 - [ ] Đổi repo sang public: **bị chặn** — token hiện tại là GitHub App integration, API trả
       `403 Resource not accessible by integration`. Cần người dùng chạy `gh repo edit --visibility public`
       trên máy có quyền, hoặc Settings → General → Danger Zone → Change visibility.
+
+## Mốc 3 — cơ chế tu luyện (thể loại tu tiên)
+
+- [x] **5 cảnh giới × 9 tầng** = 45 tầng: Luyện Khí → Trúc Cơ → Kim Đan → Nguyên Anh → Hoá Thần.
+- [x] Thiết kế **theo thời gian**: `90s × 1.12^(tầng-1) × 2.8^(cảnh-1)` → tổng ≈ 31 giờ
+      (bế quan ×2 ≈ 16 giờ). Điều kiện bức tường: `RealmTimeMultiplier > GrowthPerStage^8`.
+- [x] `CultivationConfig.luau` (số liệu) + `Cultivation.luau` (logic thuần, test được ngoài Roblox).
+- [x] `CultivationServer.luau`: state theo người chơi, tick 1s, tự đột phá, remote
+      `CultivationState` (S→C) và `CultivationAction` (C→S: `secluded` / `request`).
+- [x] `UI/CultivationBar.luau`: thanh kiểu EXP, đổi màu theo cảnh giới, vệt sáng chạy,
+      hiệu ứng đột phá, nút Bế quan ×2, hiện "ĐỈNH PHONG" ở mốc cuối.
+- [x] `World/Modules/SectGrounds.luau`: đài tròn + đại trận + 5 trụ cảnh giới (cao/màu dần) + cổng.
+- [x] `tools/cultivation_sim/run.mjs`: dịch 2 file .luau sang JS, mô phỏng đột phá thật → 12 mục PASS.
+- [x] Đã xoá `SyncYard.luau` (sân thử cũ).
+
+### Lỗi thiết kế đã bắt được nhờ sim (đáng ghi nhớ)
+
+Bản đầu dùng "mỗi cảnh giới khó ×8" nhưng trong cảnh giới mỗi tầng ×1.35 → `1.35^8 = 11.06 > 8`,
+nên **tầng 1 cảnh giới mới lại DỄ hơn tầng 9 cảnh cũ**. Sim phát hiện ngay (2 mục FAIL).
+Đã sửa sang thiết kế theo thời gian và thêm kiểm tra ràng buộc này.
+
+### Việc tiếp theo (gợi ý thứ tự)
+
+1. Đột phá cảnh giới có **tỉ lệ thất bại** + vật phẩm hỗ trợ (đan dược) → tạo căng thẳng.
+2. Linh thạch / điểm cống hiến: nguồn tăng tốc độ tu luyện.
+3. DataStore để giữ tiến độ giữa các phiên.
+4. Công pháp (chọn hệ: kiếm / lôi / hoả) đổi `GrowthPerStage` hoặc `BaseRate`.
