@@ -107,8 +107,13 @@ function flattenSources(node, prefix, out) {
 
   // 3. tác vụ dựng lại thế giới
   const actions = Array.isArray(bundle.actions) ? bundle.actions : [];
+  // tác vụ dựng lại = chứa BrigeWorld + gọi module build (loại trừ preview UI)
   const rebuild = actions.filter(
-    (a) => typeof a.code === "string" && (a.code.includes("rebuild_world_action") || a.code.includes("BrigeWorld") || a.code.includes("World.Modules"))
+    (a) =>
+      typeof a.code === "string" &&
+      a.code.includes("BrigeWorld") &&
+      a.code.includes("Modules") &&
+      !a.code.includes("BrigeCultivationPreview")
   );
   if (rebuild.length === 0) {
     bad(`Gói có ${actions.length} tác vụ nhưng KHÔNG có tác vụ dựng lại thế giới → Studio nhận script nhưng map không đổi.`);

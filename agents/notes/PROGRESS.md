@@ -71,3 +71,26 @@ nên **tầng 1 cảnh giới mới lại DỄ hơn tầng 9 cảnh cũ**. Sim p
 2. Linh thạch / điểm cống hiến: nguồn tăng tốc độ tu luyện.
 3. DataStore để giữ tiến độ giữa các phiên.
 4. Công pháp (chọn hệ: kiếm / lôi / hoả) đổi `GrowthPerStage` hoặc `BaseRate`.
+
+## Mốc 4 — sửa lỗi "cập nhật không được" + preview edit mode
+
+### Nguyên nhân gốc (quan trọng)
+
+Plugin chống chạy trùng bằng `action.id`. Id tác vụ dựng lại = băm nội dung **file action**
+(hiếm khi đổi) → id cố định → **chỉ chạy 1 lần duy nhất**. Các lần publish sau: script mới
+được ghi nhưng `Workspace.BrigeWorld` không dựng lại ⇒ nhìn như "sync không ăn".
+
+Sửa: khoá = `<action.id>@<bundle.hash>`; `action.once = true` để ghim chạy-1-lần khi cần.
+
+### Chế độ xem ngay (không cần Start Client)
+
+- [x] Tách thanh UI ra `src/shared/UI/CultivationBarView.luau` → **dùng chung** cho client và preview.
+- [x] `bridge/preview_cultivation_action.luau`: dựng thanh trong `CoreGui.BrigeCultivationPreview`,
+      tua ×2400, chạy hết 45 tầng trong ~30 giây, có nút tạm dừng / về tầng 1, tự nhường khi Play.
+- [x] `publish.mjs` đính kèm 2 tác vụ mặc định (dựng thế giới + preview), có `--no-preview`.
+- [x] `check_bundle.cjs` thêm 2 kiểm tra: plugin phải dedupe theo hash gói; gói phải có action preview.
+
+### Bài học
+
+Test cũ chỉ kiểm *nội dung gói*, không kiểm *plugin có chạy tác vụ hay không*. Đã bổ sung.
+Lần sau thêm cơ chế mới thì luôn thêm một mục kiểm tra tương ứng vào `check_bundle.cjs`.

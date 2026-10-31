@@ -53,6 +53,26 @@ Số liệu nằm **toàn bộ** ở `src/shared/CultivationConfig.luau` — s�
 
 ---
 
+## 1b. Xem ngay trong Studio mà KHÔNG cần bấm Play
+
+Mỗi lần publish, gói sync có **2 tác vụ**:
+
+| Tác vụ | Việc |
+| --- | --- |
+| `rebuild_world_action.luau` | dựng lại `Workspace.BrigeWorld` (đài + 5 trụ cảnh giới) |
+| `preview_cultivation_action.luau` | hiện **thanh tu luyện ngay trong edit mode** ở `CoreGui.BrigeCultivationPreview` |
+
+Sau khi dán lệnh Command Bar, bạn thấy ngay thanh tiến độ ở đáy màn hình — **không cần Play,
+không cần mở client**. Preview còn tự mô phỏng tu luyện tua ×2400 nên chạy hết 45 tầng trong
+~30 giây để xem đủ 5 cảnh giới đổi màu. Có nút "Tạm dừng tua" và "Về tầng 1".
+
+Thanh này dùng **chung một file** với thanh trong game (`src/shared/UI/CultivationBarView.luau`),
+nên sửa UI là preview đổi y hệt lúc chơi. Bấm Play thì preview tự nhường cho thanh thật của client.
+
+> Nếu muốn tắt preview: `node bridge/publish.mjs --no-preview "msg"`.
+
+---
+
 ## 2. Cấu trúc
 
 ```text
@@ -63,6 +83,7 @@ src/
     Net.luau                    # tạo/lấy RemoteEvent
     CultivationConfig.luau      # ★ toàn bộ số liệu tu luyện (5 cảnh giới × 9 tầng)
     Cultivation.luau            # ★ logic thuần: tick, đột phá, snapshot (không đụng Instance)
+    UI/CultivationBarView.luau  # ★ thanh tu luyện — dùng CHUNG cho game và preview
     World/
       BuildKit.luau             # hàm dựng hình dùng chung
       Modules/SectGrounds.luau  # dựng sân tông môn + 5 trụ cảnh giới
@@ -70,13 +91,13 @@ src/
     Main.server.luau            # điểm vào, khởi động hệ tu luyện
     CultivationServer.luau      # giữ state từng người chơi, vòng tick 1s, phát snapshot
   client/
-    Init.client.luau            # điểm vào client
+    Init.client.luau            # điểm vào client (dùng thanh từ Shared)
     UI/Hud.luau                 # bảng nhỏ tên game / version
-    UI/CultivationBar.luau      # ★ thanh tiến độ tu luyện
 bridge/
   compiler.mjs                  # đóng gói src/ thành studio-sync.json (hash, version, actions)
   publish.mjs                   # publish: ghi gói, commit, push, in lệnh Command Bar (có --dry-run)
   rebuild_world_action.luau     # tác vụ dựng lại Workspace.BrigeWorld
+  preview_cultivation_action.luau # tác vụ preview UI trong edit mode
 plugin/StudioLiveBridge.server.luau   # plugin Studio: tải gói theo commit SHA
 tools/
   sync_sim/check_bundle.cjs     # kiểm gói sync so với repo (PASS/FAIL)
@@ -157,6 +178,26 @@ số lần đột phá sai, tràn số, snapshot thiếu trường cho UI. Vì v
 - **actions**: plugin chỉ ghi Source; mỗi lần publish đính kèm tác vụ `rebuild_world_action.luau`
   (id = `act-<băm nội dung>`) để dựng lại thế giới đúng một lần.
 - **Tách logic khỏi Instance**: `Cultivation.luau` thuần dữ liệu → test được ngoài Roblox.
+
+## 7b. Vì sao trước đây "cập nhật không được"
+
+Plugin cũ chống chạy trùng bằng **`action.id`**. Mà id của tác vụ dựng lại được băm từ *nội dung
+file action* — file này hiếm khi đổi, nên **id không đổi**. Kết quả:
+
+- Lần sync đầu tiên: tác vụ chạy → dựng thế giới. ✔
+- Mọi lần publish sau: plugin thấy "id này đã chạy rồi" → **bỏ qua** → Script/ModuleScript được
+  ghi mới nhưng `Workspace.BrigeWorld` đứng yên → nhìn như "không cập nhật".
+
+Đã sửa: khoá chống trùng giờ là **`<action.id>@<hash của gói>`**.
+
+| Trường hợp | Trước | Sau |
+| --- | --- | --- |
+| Nội dung mới (hash đổi) | bỏ qua ❌ | chạy lại 1 lần ✔ |
+| Sync y nguyên | bỏ qua ✔ | bỏ qua ✔ (không tốn thời gian) |
+| `action.once = true` | — | chạy đúng 1 lần mãi mãi |
+
+`check_bundle.cjs` giờ **bắt lỗi này tự động**: nếu plugin quay lại dedupe theo `action.id`,
+bài test in FAIL kèm đúng tên lỗi.
 
 ## 8. Nếu repo bị đổi về private
 
