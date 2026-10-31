@@ -35,11 +35,13 @@ function SectGrounds.build(root: Instance, _kit: any)
 		material = Enum.Material.Slate,
 	})
 
-	-- Đài tròn chính (dùng Part hình trụ)
+	-- Đài tròn chính.
+	-- Lưu ý: Part hình trụ (Cylinder) có trục theo X, nên phải xoay 90° quanh Z
+	-- để mặt tròn nằm ngang; Size = (độ dày, đường kính, đường kính).
 	BuildKit.part(root, {
 		name = "MainPlatform",
-		size = Vector3.new(PLATFORM_RADIUS * 2, 2, PLATFORM_RADIUS * 2),
-		cframe = CFrame.new(0, 1, 0),
+		size = Vector3.new(2, PLATFORM_RADIUS * 2, PLATFORM_RADIUS * 2),
+		cframe = CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)),
 		color = Color3.fromRGB(52, 60, 76),
 		material = Enum.Material.Cobblestone,
 		shape = Enum.PartType.Cylinder,
