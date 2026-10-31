@@ -134,7 +134,9 @@ async function main() {
 
 	fs.writeFileSync(SYNC_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", "utf8");
 
-	git(["add", "studio-sync.json"]);
+	// add -A: mã nguồn, tài liệu và gói sync đi cùng 1 commit → nội dung repo luôn
+	// khớp đúng gói mà Studio tải về. File rác đã bị .gitignore chặn.
+	git(["add", "-A"]);
 	const status = git(["status", "--porcelain"]);
 	if (!status) {
 		console.log("ℹ️  Không có thay đổi nội dung — studio-sync.json y hệt bản đã commit.");

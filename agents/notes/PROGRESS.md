@@ -22,3 +22,16 @@ Cập nhật: 2026-10-31 · nhánh `arena/caf04b02-brige`
 ## Nhật ký
 
 - 2026-10-31 — Khung repo + đường ống sync hoàn chỉnh, `check_bundle` PASS.
+
+## Nghiệm thu (2026-10-31)
+
+| Hạng mục | Lệnh | Kết quả |
+| --- | --- | --- |
+| Dry-run in đúng số file + lệnh Command Bar | `node bridge/publish.mjs --dry-run "test"` | ✅ 7 file, 1 tác vụ, lệnh gắn SHA |
+| Publish thật | `node bridge/publish.mjs "feat: …"` | ✅ Sync v1 @ `6780e89` |
+| Kiểm gói | `node tools/sync_sim/check_bundle.cjs` | ✅ PASS (6 mục ok, 0 lỗi) |
+| Parse/compile toàn bộ `.luau` | `luau-compile --binary` (Luau chính thức) | ✅ 9/9 file OK |
+| Raw URL trong lệnh Command Bar | `curl -sI <raw url>` | ⚠️ 404 vì repo **private** → xem mục 6 README |
+
+Lưu ý private repo: `raw.githubusercontent.com` không phục vụ repo private, nên dòng
+Command Bar chỉ chạy khi repo được đổi sang public. Đường ống không có lỗi gì khác.
