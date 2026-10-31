@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import {
 	REPO_ROOT,
 	SYNC_BUNDLE_FILE,
@@ -27,10 +28,12 @@ import {
 	buildGitHubCommandBarOneLiner,
 } from "./compiler.mjs";
 
-// Tác vụ mặc định kèm mỗi lần publish:
-//   1. dựng lại thế giới (bắt buộc — không có thì map không đổi)
-//   2. preview thanh tu luyện ngay trong edit mode (không cần bấm Play)
-const REBUILD_ACTION_FILE = "bridge/rebuild_world_action.luau";
+// Tác vụ mặc định: CHỈ preview UI trong edit mode.
+// Không dựng map nữa (yêu cầu: "không cần xây gì hết") → publish nhanh, không đụng Workspace.
+// Nếu sau này cần dựng thế giới: --action-file bridge/rebuild_world_action.luau
+const makeActionIdFor = (code) =>
+	`act-${crypto.createHash("sha256").update(code).digest("hex").slice(0, 12)}`;
+
 const PREVIEW_ACTION_FILE = "bridge/preview_cultivation_action.luau";
 
 function parseArgs(argv) {
@@ -41,12 +44,18 @@ function parseArgs(argv) {
 	let noAction = false;
 	let dryRun = false;
 	let noPreview = false;
+	let previewRealm = 1;
+	let previewStage = 1;
+	let previewQi = 55;
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--dry-run") dryRun = true;
 		else if (arg === "--no-action") noAction = true;
 		else if (arg === "--no-preview") noPreview = true;
+		else if (arg === "--realm" && argv[i + 1]) previewRealm = Number(argv[++i]) || 1;
+		else if (arg === "--stage" && argv[i + 1]) previewStage = Number(argv[++i]) || 1;
+		else if (arg === "--qi" && argv[i + 1]) previewQi = Math.max(1, Math.min(99, Number(argv[++i]) || 55));
 		else if (arg === "--action-desc" && argv[i + 1]) actionDesc = argv[++i];
 		else if (arg === "--action-code" && argv[i + 1]) actionCode = argv[++i];
 		else if (arg === "--action-file" && argv[i + 1]) actionFile = argv[++i];
@@ -56,26 +65,55 @@ function parseArgs(argv) {
 		} else if (!arg.startsWith("--")) message = arg;
 	}
 
-	// MẶC ĐỊNH: luôn kèm tác vụ dựng lại thế giới, trừ khi người dùng chỉ định
-	// action khác hoặc --no-action.
 	const usingDefaults = !actionFile && !actionCode && !noAction;
-	if (usingDefaults) {
-		actionFile = REBUILD_ACTION_FILE;
-		actionDesc = actionDesc || "Dựng lại thế giới brige (tăng dần theo mã băm từng module)";
-	}
 
 	const actions = [];
 	if (actionCode) actions.push(makeActionFromCode(actionCode, actionDesc));
 	else if (actionFile) actions.push(makeActionFromFile(actionFile, actionDesc));
 
-	// Preview UI chỉ đính kèm khi dùng bộ mặc định (không phải action tự nhập).
+	// Preview UI: tác vụ mặc định duy nhất (trừ khi --no-preview / action tự nhập).
 	if (usingDefaults && !noPreview) {
 		actions.push(
 			makeActionFromFile(PREVIEW_ACTION_FILE, "Preview thanh tu luyện trong edit mode")
 		);
 	}
 
-	return { message, actions, dryRun };
+	return { message, actions, dryRun, previewRealm, previewStage, previewQi };
+}
+
+/**
+ * Nhúng state tu luyện thật vào action preview: publish.mjs đọc Cultivation.luau +
+ * CultivationConfig.luau (cùng bộ dịch với tools/cultivation_sim) rồi thay 2 dòng marker
+ * trong bridge/preview_cultivation_action.luau.
+ * Nhờ vậy bấm "Tầng sau 20 lần" không cần làm, chỉ cần publish là xem đúng cảnh giới.
+ */
+async function withPreviewSnapshot(action, realm, stage, qiPercent) {
+	if (!action || !String(action.code).includes("PREVIEW_SNAPSHOT")) return action;
+	try {
+		const { loadCultivation } = await import("../tools/cultivation_sim/luau_loader.mjs");
+		const { Cultivation, CultivationConfig } = loadCultivation();
+		const state = Cultivation.newState(realm, stage);
+		state.qi = Cultivation.requirement(state) * (qiPercent / 100);
+		const snapshot = Cultivation.snapshot(state);
+		const literal = JSON.stringify(
+			{
+				realm: snapshot.realm,
+				stage: snapshot.stage,
+				qi: snapshot.qi,
+				required: snapshot.required,
+				progress: snapshot.progress,
+			},
+			null,
+			0
+		);
+		const code = String(action.code)
+			.replace('local PREVIEW_MODEL = "loop"', 'local PREVIEW_MODEL = "snap"')
+			.replace("local PREVIEW_SNAPSHOT = nil", `local PREVIEW_SNAPSHOT = ${literal}`);
+		return { ...action, code, id: makeActionIdFor(code) };
+	} catch (err) {
+		console.warn(`⚠️  Không nhúng được state preview: ${err.message}`);
+		return action;
+	}
 }
 
 function git(args) {
@@ -116,7 +154,15 @@ function assertHeadMatchesOrigin() {
 }
 
 async function main() {
-	const { message, actions, dryRun } = parseArgs(process.argv.slice(2));
+	const { message, actions, dryRun, previewRealm, previewStage, previewQi } = parseArgs(
+		process.argv.slice(2)
+	);
+
+	// Nhúng state tu luyện thật vào action preview (để xem đúng cảnh giới muốn chỉnh)
+	for (let i = 0; i < actions.length; i++) {
+		actions[i] = await withPreviewSnapshot(actions[i], previewRealm, previewStage, previewQi);
+	}
+
 	const bundle = compileSyncBundle(actions);
 
 	console.log(`📦 Repo: ${GITHUB_OWNER}/${GITHUB_REPO} · nhánh ${GITHUB_BRANCH}`);

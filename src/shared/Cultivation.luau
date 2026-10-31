@@ -188,4 +188,30 @@ function Cultivation.snapshot(state)
 	return snapshot
 end
 
+--[[
+	Dựng lại State từ một snapshot (vd: gói preview trong studio-sync.json).
+	Dùng để client/preview chạy ĐÚNG cùng một logic tick, không viết lại công thức.
+	`secluded`/`totalQi`/`breakthroughs` nhận giá trị mặc định hợp lý.
+]]
+function Cultivation.stateFromSnapshot(snapshot)
+	local state = Cultivation.newState(snapshot.realm, snapshot.stage)
+	state.qi = snapshot.qi or 0
+	return state
+end
+
+--[[
+	State phỏng vấn cho bản preview: trải đều 45 tầng để xem hình thức từng cảnh giới.
+	`index` chạy từ 0 → 44 (0 = Luyện Khí tầng 1, 44 = Hoá Thần tầng 9).
+]]
+function Cultivation.previewStateAt(index)
+	local perRealm = CultivationConfig.StagesPerRealm
+	local total = CultivationConfig.StagesPerRealm * CultivationConfig.maxRealm()
+	local clamped = math.clamp(index, 0, total - 1)
+	local realm = math.floor(clamped / perRealm) + 1
+	local stage = clamped % perRealm + 1
+	local state = Cultivation.newState(realm, stage)
+	state.qi = Cultivation.requirement(state) * 0.55
+	return state
+end
+
 return Cultivation

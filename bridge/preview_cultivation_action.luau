@@ -1,25 +1,30 @@
 --!strict
 --[[
-	preview_cultivation_action.luau — XEM NGAY thanh tu luyện TRONG STUDIO EDIT MODE.
-	Không cần bấm Play, không cần mở client.
+	preview_cultivation_action.luau — XEM UI TU LUYỆN NGAY TRONG STUDIO EDIT MODE.
+	Không cần bấm Play, không cần mở client, KHÔNG dựng/xoá bất kỳ thứ gì trong Workspace.
 
-	publish.mjs tự đính kèm file này vào studio-sync.json sau mỗi lần publish, nên:
-		sửa src/ → publish → dán lệnh Command Bar → Studio hiện thanh tiến độ + sân tông môn.
+	Chạy ở TỐC ĐỘ THẬT (1 giây = 1 giây) nên thanh chạy êm, không giật.
 
-	Nó cũng mô phỏng tu luyện ngay trong edit mode: khí tăng dần, tự đột phá, chạy hết
-	45 tầng trong ~30 giây (tua nhanh ×2400) để bạn thấy được cả 5 cảnh giới đổi màu.
-	Bấm nút "Tua nhanh" để bật/tắt, nút "Về tầng 1" để xem lại từ đầu.
+	Hai nguồn dữ liệu:
+		• PREVIEW_MODEL = "loop"  → tự mô phỏng tu luyện (mượt, tốc độ thật)
+		• PREVIEW_MODEL = "snap"  → publish.mjs ghi đè bằng state thật (realm/stage/qi)
+		  để xem đúng cảnh giới đang muốn chỉnh
 
-	Chỉ ảnh hưởng Studio edit mode — Play thật vẫn do server/client lo.
+	Nút bấm:
+		[ Tầng trước ] [ Tầng sau ]  → nhảy xem hình thức từng cảnh giới (không đổi dữ liệu)
+		[ Bế quan ×2 ]               → bật/tắt tốc độ
+		[ Tốc độ: ×1 ]               → ×1 (thật) / ×10 (xem nhanh) / ×60
 ]]
 
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local PREVIEW_NAME = "BrigeCultivationPreview"
-local SPEED = 2400 -- giây tu luyện mỗi giây thật
+
+-- publish.mjs thay 2 dòng dưới bằng state thật khi publish
+local PREVIEW_MODEL = "loop"
+local PREVIEW_SNAPSHOT = nil
 
 -- Dọn bản preview cũ (chạy lại lệnh nhiều lần không bị chồng)
 local existing = CoreGui:FindFirstChild(PREVIEW_NAME)
@@ -42,7 +47,7 @@ local Cultivation = require(shared:WaitForChild("Cultivation"))
 local BarView = require(shared:WaitForChild("UI"):WaitForChild("CultivationBarView"))
 
 -- ============================================================================
--- GIAO DIỆN PREVIEW
+-- GIAO DIỆN PREVIEW (chỉ UI, không tạo/xoá part nào)
 -- ============================================================================
 local gui = Instance.new("ScreenGui")
 gui.Name = PREVIEW_NAME
@@ -51,78 +56,107 @@ gui.IgnoreGuiInset = true
 gui.DisplayOrder = 50
 gui.Parent = CoreGui
 
-local bar = BarView.new(gui)
+local bar = BarView.new(gui, { autoFade = false })
 
--- nhãn nhỏ cho biết đây là preview trong edit mode + tốc độ tua
+-- nhãn nhỏ
 local tag = Instance.new("TextLabel")
 tag.Name = "PreviewTag"
 tag.AnchorPoint = Vector2.new(0.5, 1)
-tag.Position = UDim2.new(0.5, 0, 1, -120)
-tag.Size = UDim2.fromOffset(460, 18)
+tag.Position = UDim2.new(0.5, 0, 1, -134)
+tag.Size = UDim2.fromOffset(520, 18)
 tag.BackgroundTransparency = 1
 tag.Font = Enum.Font.Code
 tag.TextSize = 11
-tag.TextColor3 = Color3.fromRGB(148, 163, 184)
-tag.Text = string.format("PREVIEW edit mode · tua ×%d · chỉ để xem giao diện", SPEED)
+tag.TextColor3 = Color3.fromRGB(120, 132, 150)
+tag.Text = "PREVIEW edit mode · không dựng map · tốc độ thật"
 tag.Parent = gui
 
--- nút điều khiển preview
-local function makeButton(text: string, offsetX: number): TextButton
+local function makeButton(text: string, offsetX: number, width: number?): TextButton
 	local button = Instance.new("TextButton")
 	button.AnchorPoint = Vector2.new(0.5, 0)
-	button.Position = UDim2.new(0.5, offsetX, 1, -140)
-	button.Size = UDim2.fromOffset(120, 24)
-	button.BackgroundColor3 = Color3.fromRGB(42, 48, 64)
+	button.Position = UDim2.new(0.5, offsetX, 1, -154)
+	button.Size = UDim2.fromOffset(width or 118, 24)
+	button.BackgroundColor3 = Color3.fromRGB(28, 33, 44)
 	button.Font = Enum.Font.GothamMedium
 	button.TextSize = 11
-	button.TextColor3 = Color3.fromRGB(220, 228, 245)
+	button.TextColor3 = Color3.fromRGB(210, 220, 235)
 	button.Text = text
+	button.AutoButtonColor = false
 	button.Parent = gui
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, 6)
 	c.Parent = button
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.fromRGB(70, 82, 104)
+	s.Thickness = 1
+	s.Transparency = 0.4
+	s.Parent = button
 	return button
 end
 
-local speedBtn = makeButton("Tạm dừng tua", -66)
-local resetBtn = makeButton("Về tầng 1", 66)
+local prevBtn = makeButton("◀ Tầng trước", -192)
+local nextBtn = makeButton("Tầng sau ▶", -64)
+local speedBtn = makeButton("Tốc độ ×1", 64)
+local loopBtn = makeButton("Tự chạy: BẬT", 192)
 
 -- ============================================================================
--- MÔ PHỎNG TU LUYỆN NGAY TRONG EDIT MODE
+-- TRẠNG THÁI
 -- ============================================================================
+local totalStages = CultivationConfig.StagesPerRealm * CultivationConfig.maxRealm()
+local cursor = 0 -- vị trí đang xem (0..totalStages-1)
 local state = Cultivation.newState(1, 1)
-local running = true
+local speeds = { 1, 10, 60 }
+local speedIndex = 1
+local autoRun = true
+
+if PREVIEW_MODEL == "snap" and type(PREVIEW_SNAPSHOT) == "table" then
+	-- state thật do publish ghi vào: hiện đúng cảnh giới, không tự chạy
+	state = Cultivation.stateFromSnapshot(PREVIEW_SNAPSHOT)
+	cursor = (state.realm - 1) * CultivationConfig.StagesPerRealm + (state.stage - 1)
+	autoRun = false
+	tag.Text = "PREVIEW edit mode · state thật từ studio-sync.json · không dựng map"
+end
+
+local function refresh()
+	bar:setSnapshot(Cultivation.snapshot(state))
+	loopBtn.Text = if autoRun then "Tự chạy: BẬT" else "Tự chạy: TẮT"
+	speedBtn.Text = string.format("Tốc độ ×%d", speeds[speedIndex])
+end
+
+local function jumpTo(index: number)
+	cursor = math.clamp(index, 0, totalStages - 1)
+	state = Cultivation.previewStateAt(cursor)
+	refresh()
+end
+
+prevBtn.MouseButton1Click:Connect(function()
+	autoRun = false
+	jumpTo(cursor - 1)
+end)
+
+nextBtn.MouseButton1Click:Connect(function()
+	autoRun = false
+	jumpTo(cursor + 1)
+end)
+
+speedBtn.MouseButton1Click:Connect(function()
+	speedIndex = speedIndex % #speeds + 1
+	refresh()
+end)
+
+loopBtn.MouseButton1Click:Connect(function()
+	autoRun = not autoRun
+	refresh()
+end)
 
 bar.onSecludedToggle = function()
 	Cultivation.setSecluded(state, not state.secluded)
-	bar:setSnapshot(Cultivation.snapshot(state))
+	refresh()
 end
 
-speedBtn.MouseButton1Click:Connect(function()
-	running = not running
-	speedBtn.Text = if running then "Tạm dừng tua" else "Tiếp tục tua"
-end)
-
-resetBtn.MouseButton1Click:Connect(function()
-	state = Cultivation.newState(1, 1)
-	bar:setSnapshot(Cultivation.snapshot(state))
-end)
-
--- Đặt bi của người chơi lên bệ ngồi giữa đài để thấy tỉ lệ (không bắt buộc).
-local function movePreviewCamera()
-	local world = Workspace:FindFirstChild("BrigeWorld")
-	if not world then
-		return
-	end
-	local seat = world:FindFirstChild("MeditationSeat")
-	local camera = Workspace.CurrentCamera
-	if seat and camera then
-		camera.CFrame = CFrame.lookAt(seat.Position + Vector3.new(0, 26, 62), seat.Position + Vector3.new(0, 6, 0))
-	end
-end
-task.delay(0.3, movePreviewCamera)
-
--- vòng cập nhật: chỉ chạy trong edit mode để không tranh việc với server khi Play
+-- ============================================================================
+-- VÒNG CẬP NHẬT — chỉ chạy trong edit mode, tốc độ thật
+-- ============================================================================
 local heartbeat = RunService.Heartbeat:Connect(function(dt)
 	if not gui.Parent then
 		return
@@ -130,8 +164,10 @@ local heartbeat = RunService.Heartbeat:Connect(function(dt)
 	if not RunService:IsEdit() then
 		return
 	end
-	if running then
-		Cultivation.tick(state, dt * SPEED)
+	if autoRun then
+		local speed = speeds[speedIndex]
+		Cultivation.tick(state, math.min(dt, 0.1) * speed)
+		cursor = (state.realm - 1) * CultivationConfig.StagesPerRealm + (state.stage - 1)
 	end
 	bar:setSnapshot(Cultivation.snapshot(state))
 end)
@@ -145,7 +181,7 @@ _G.__BRIGE_PREVIEW_CLEANUP = function()
 	end
 end
 
-bar:setSnapshot(Cultivation.snapshot(state))
+jumpTo(cursor)
 
-print("[brige preview] ✅ Đang hiện thanh tu luyện trong edit mode (không cần Play).")
-print(string.format("[brige preview] Mô phỏng tua ×%d — cả 45 tầng trong khoảng %d giây.", SPEED, 31 * 3600 / SPEED))
+print("[brige preview] ✅ Thanh tu luyện đang hiện trong edit mode (không cần Play, không dựng map).")
+print("[brige preview] Dùng nút ◀ ▶ để xem nhanh cảnh giới · Tốc độ ×1/×10/×60 · Tự chạy BẬT/TẮT.")

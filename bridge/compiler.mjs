@@ -200,7 +200,8 @@ function makeActionId(code) {
 	return `act-${digest}`;
 }
 
-export function compileSyncBundle(extraActions = null) {
+export function compileSyncBundle(extraActions = null, options = {}) {
+	const keepHistory = options.keepHistory === true;
 	const rawProject = JSON.parse(fs.readFileSync(PROJECT_FILE, "utf8"));
 	const tree = rawProject.tree || {};
 	const fileManifest = [];
@@ -214,7 +215,10 @@ export function compileSyncBundle(extraActions = null) {
 	}
 
 	const prev = loadExistingBundle();
-	const actions = Array.isArray(prev.actions) ? [...prev.actions] : [];
+	// Mặc định: gói chỉ mang ĐÚNG các tác vụ của lần publish này (replace).
+	// Trước đây cộng dồn lịch sử → tác vụ dựng thế giới cũ còn nằm mãi trong gói
+	// dù đã bỏ (và chạy lại mỗi khi hash đổi). `keepHistory` để dành khi cần.
+	const actions = keepHistory && Array.isArray(prev.actions) ? [...prev.actions] : [];
 	const incoming = Array.isArray(extraActions) ? extraActions : extraActions ? [extraActions] : [];
 	for (const action of incoming) {
 		// id băm từ nội dung: nếu đã có action y hệt thì GIỮ bản cũ (createdAt ổn định),
