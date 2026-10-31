@@ -119,3 +119,17 @@ nhảy liên tục vừa tranh nhau với tween cũ. Sửa:
 - Tự mờ khi không thao tác, rê chuột sáng lại.
 - `publish.mjs --realm N --stage M --qi P` → nhúng state thật để xem đúng cảnh giới cần chỉnh.
 - `tools/cultivation_sim/luau_loader.mjs` dùng chung cho `run.mjs` và `publish.mjs`.
+
+## Mốc 6 — chặn lỗi "action không compile"
+
+- [x] Phát hiện: `publish.mjs` nhúng snapshot preview bằng `JSON.stringify` → `{"realm":1}`
+      không phải cú pháp Lua ⇒ `loadstring` trong Studio lỗi ⇒ action im lặng không chạy.
+      Sửa sang `{ realm = 4, stage = 7, ... }`.
+- [x] Thêm `tools/sync_sim/luau_check.cjs`: biên dịch mọi `.luau` nguồn **và code của mọi action**
+      bằng luau-compile thật. Chạy sau mỗi publish.
+- [x] Quy trình chuẩn giờ là: publish → `check_bundle.cjs` → `luau_check.cjs`, cả hai phải PASS.
+
+### Ghi chú môi trường
+
+`/tmp` bị dọn giữa các lượt nên bản build Luau ở `/tmp` biến mất. Đã dựng lại ở
+`~/.tools/luau` (bền hơn) và `luau_check.cjs` tự dò nhiều đường dẫn + biến `LUAU_COMPILE`.

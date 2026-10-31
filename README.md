@@ -147,8 +147,14 @@ node tools/cultivation_sim/run.mjs          # bảng cân bằng + 12 mục ki�
 node tools/cultivation_sim/run.mjs --full   # in chi tiết cả 45 tầng
 node bridge/publish.mjs --dry-run "test"    # xem số file + lệnh Command Bar, không ghi/commit
 node bridge/publish.mjs "feat: …"           # publish thật (ghi studio-sync.json, commit, push)
-node tools/sync_sim/check_bundle.cjs        # phải in PASS
+node tools/sync_sim/check_bundle.cjs        # phải in PASS (nội dung gói)
+node tools/sync_sim/luau_check.cjs          # phải in PASS (mọi thứ Studio loadstring đều compile được)
 ```
+
+`luau_check.cjs` biên dịch **mọi file .luau + code của mọi action** bằng trình biên dịch Luau
+thật (tìm ở `$LUAU_COMPILE` / PATH / `~/.tools/luau/build`). Bài này ra đời sau khi phát hiện
+lỗi: snapshot preview bị nhúng bằng JSON (`{"realm":1}`) thay vì bảng Lua (`{ realm = 1 }`)
+→ Studio báo lỗi cú pháp và **không chạy gì cả**.
 
 `cultivation_sim` **dịch chính 2 file .luau sang JS rồi chạy logic thật** (không phải bản sao),
 nên sửa config sai là bắt được ngay: tầng sau dễ hơn tầng trước, bức tường cảnh giới bị phá,
