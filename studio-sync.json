@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "hash": "9eb42f8704a83de2",
+  "projectName": "brige",
+  "repo": "khungdienchinhhieu-cmd/brige",
+  "branch": "arena/caf04b02-brige",
+  "updatedAt": "2026-10-31T10:58:29.066Z",
+  "files": [
+    {
+      "repoPath": "src/shared/Config.luau",
+      "className": "ModuleScript",
+      "bytes": 881
+    },
+    {
+      "repoPath": "src/shared/Net.luau",
+      "className": "ModuleScript",
+      "bytes": 1422
+    },
+    {
+      "repoPath": "src/shared/World/BuildKit.luau",
+      "className": "ModuleScript",
+      "bytes": 2077
+    },
+    {
+      "repoPath": "src/shared/World/Modules/SyncYard.luau",
+      "className": "ModuleScript",
+      "bytes": 2681
+    },
+    {
+      "repoPath": "src/server/Main.server.luau",
+      "className": "Script",
+      "bytes": 1650
+    },
+    {
+      "repoPath": "src/client/Init.client.luau",
+      "className": "LocalScript",
+      "bytes": 1021
+    },
+    {
+      "repoPath": "src/client/UI/Hud.luau",
+      "className": "ModuleScript",
+      "bytes": 2995
+    }
+  ],
+  "services": {
+    "ReplicatedStorage": {
+      "className": "ReplicatedStorage",
+      "isService": true,
+      "managed": false,
+      "children": {
+        "Shared": {
+          "className": "Folder",
+          "managed": true,
+          "children": {
+            "Config": {
+              "className": "ModuleScript",
+              "managed": true,
+              "repoPath": "src/shared/Config.luau",
+              "source": "--!strict\n--[[\n\tConfig — cấu hình chung của brige.\n\tThể loại game CHƯA CHỐT: hiện repo dựng \"Sync Yard\", một sân thử để kiểm tra\n\tđường ống Rojo → studio-sync.json → Studio trước khi chọn hướng game thật.\n]]\n\nlocal Config = {\n\tGameName = \"brige\",\n\tTagline = \"Sync Yard — sân thử đồng bộ trực tiếp\",\n\tVersion = \"0.1.0\",\n\n\t-- Tên folder thế giới do bridge/rebuild_world_action.luau dựng trong Workspace.\n\tWorldName = \"BrigeWorld\",\n\n\t-- Kích thước sân thử (studs).\n\tYardSize = 240,\n\tYardTileSize = 24,\n\n\t-- Màu chủ đạo (dùng chung cho module thế giới và UI).\n\tTheme = {\n\t\tBackground = Color3.fromRGB(18, 21, 28),\n\t\tSurface = Color3.fromRGB(28, 32, 42),\n\t\tAccent = Color3.fromRGB(56, 189, 248),\n\t\tText = Color3.fromRGB(232, 240, 252),\n\t\tMuted = Color3.fromRGB(148, 163, 184),\n\t},\n}\n\nreturn Config\n",
+              "children": {}
+            },
+            "Net": {
+              "className": "ModuleScript",
+              "managed": true,
+              "repoPath": "src/shared/Net.luau",
+              "source": "--!strict\n--[[\n\tNet — tạo/lấy RemoteEvent dùng chung.\n\tServer gọi Net.getRemote(\"Notify\") để tạo; client gọi cùng hàm và chờ remote.\n]]\n\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal FOLDER_NAME = \"BrigeRemotes\"\n\nlocal Net = {}\n\nlocal function ensureFolder(): Folder\n\tlocal existing = ReplicatedStorage:FindFirstChild(FOLDER_NAME)\n\tif existing and existing:IsA(\"Folder\") then\n\t\treturn existing\n\tend\n\tlocal folder = Instance.new(\"Folder\")\n\tfolder.Name = FOLDER_NAME\n\tfolder.Parent = ReplicatedStorage\n\treturn folder\nend\n\n--[[ Tạo remote nếu chưa có (chỉ dùng phía server). ]]\nfunction Net.createRemote(name: string): RemoteEvent\n\tlocal folder = ensureFolder()\n\tlocal existing = folder:FindFirstChild(name)\n\tif existing and existing:IsA(\"RemoteEvent\") then\n\t\treturn existing\n\tend\n\tlocal remote = Instance.new(\"RemoteEvent\")\n\tremote.Name = name\n\tremote.Parent = folder\n\treturn remote\nend\n\n--[[ Lấy remote, chờ tối đa timeout giây (dùng phía client). ]]\nfunction Net.waitForRemote(name: string, timeout: number?): RemoteEvent?\n\tlocal deadline = os.clock() + (timeout or 10)\n\trepeat\n\t\tlocal folder = ReplicatedStorage:FindFirstChild(FOLDER_NAME)\n\t\tif folder then\n\t\t\tlocal remote = folder:FindFirstChild(name)\n\t\t\tif remote and remote:IsA(\"RemoteEvent\") then\n\t\t\t\treturn remote\n\t\t\tend\n\t\tend\n\t\ttask.wait(0.1)\n\tuntil os.clock() > deadline\n\treturn nil\nend\n\nreturn Net\n",
+              "children": {}
+            },
+            "World": {
+              "className": "Folder",
+              "managed": true,
+              "children": {
+                "BuildKit": {
+                  "className": "ModuleScript",
+                  "managed": true,
+                  "repoPath": "src/shared/World/BuildKit.luau",
+                  "source": "--!strict\n--[[\n\tBuildKit — hàm dựng hình dùng chung cho mọi module trong World/Modules.\n\tMọi thứ tạo ra đều nằm dưới folder root do rebuild_world_action.luau truyền vào.\n]]\n\nlocal BuildKit = {}\n\nfunction BuildKit.part(root: Instance, props: {\n\tname: string,\n\tsize: Vector3,\n\tcframe: CFrame,\n\tcolor: Color3?,\n\tmaterial: Enum.Material?,\n\ttransparency: number?,\n\tshape: Enum.PartType?,\n}): Part\n\tlocal part = Instance.new(\"Part\")\n\tpart.Name = props.name\n\tpart.Anchored = true\n\tpart.Size = props.size\n\tpart.CFrame = props.cframe\n\tpart.Color = props.color or Color3.fromRGB(160, 170, 185)\n\tpart.Material = props.material or Enum.Material.SmoothPlastic\n\tpart.Transparency = props.transparency or 0\n\tpart.Shape = props.shape or Enum.PartType.Block\n\tpart.TopSurface = Enum.SurfaceType.Smooth\n\tpart.BottomSurface = Enum.SurfaceType.Smooth\n\tpart.Parent = root\n\treturn part\nend\n\nfunction BuildKit.wedge(root: Instance, props: {\n\tname: string,\n\tsize: Vector3,\n\tcframe: CFrame,\n\tcolor: Color3?,\n}): WedgePart\n\tlocal wedge = Instance.new(\"WedgePart\")\n\twedge.Name = props.name\n\twedge.Anchored = true\n\twedge.Size = props.size\n\twedge.CFrame = props.cframe\n\twedge.Color = props.color or Color3.fromRGB(160, 170, 185)\n\twedge.Parent = root\n\treturn wedge\nend\n\nfunction BuildKit.label(root: Instance, text: string, position: Vector3, color: Color3?): TextLabel\n\tlocal part = BuildKit.part(root, {\n\t\tname = \"Label_\" .. text,\n\t\tsize = Vector3.new(0.2, 0.2, 0.2),\n\t\tcframe = CFrame.new(position),\n\t\tcolor = Color3.fromRGB(0, 0, 0),\n\t\ttransparency = 1,\n\t})\n\tlocal billboard = Instance.new(\"BillboardGui\")\n\tbillboard.Size = UDim2.fromScale(14, 3)\n\tbillboard.AlwaysOnTop = true\n\tbillboard.MaxDistance = 400\n\tbillboard.Parent = part\n\n\tlocal label = Instance.new(\"TextLabel\")\n\tlabel.BackgroundTransparency = 1\n\tlabel.Size = UDim2.fromScale(1, 1)\n\tlabel.Font = Enum.Font.GothamBold\n\tlabel.TextScaled = true\n\tlabel.Text = text\n\tlabel.TextColor3 = color or Color3.fromRGB(232, 240, 252)\n\tlabel.TextStrokeTransparency = 0.4\n\tlabel.Parent = billboard\n\treturn label\nend\n\nreturn BuildKit\n",
+                  "children": {}
+                },
+                "Modules": {
+                  "className": "Folder",
+                  "managed": true,
+                  "children": {
+                    "SyncYard": {
+                      "className": "ModuleScript",
+                      "managed": true,
+                      "repoPath": "src/shared/World/Modules/SyncYard.luau",
+                      "source": "--!strict\n--[[\n\tSyncYard — module dựng thế giới mẫu (FOUNDATION).\n\tSân thử có lưới ô + cột mốc để nhìn là biết pipeline đồng bộ đã chạy bản mới.\n\n\tHợp đồng: module.build(root, kit) được rebuild_world_action.luau gọi.\n]]\n\nlocal Shared = script.Parent.Parent.Parent\nlocal BuildKit = require(Shared.World.BuildKit)\nlocal Config = require(Shared.Config)\n\nlocal SyncYard = {}\n\nSyncYard.FOUNDATION = true\n\nfunction SyncYard.build(root: Instance, kit: any)\n\tlocal size = Config.YardSize\n\tlocal tile = Config.YardTileSize\n\tlocal half = size / 2\n\n\t-- Sàn chính.\n\tBuildKit.part(root, {\n\t\tname = \"YardFloor\",\n\t\tsize = Vector3.new(size, 2, size),\n\t\tcframe = CFrame.new(0, 0, 0),\n\t\tcolor = Color3.fromRGB(42, 48, 62),\n\t\tmaterial = Enum.Material.Slate,\n\t})\n\n\t-- Lưới ô sáng màu để thấy rõ tỉ lệ.\n\tlocal count = math.floor(size / tile)\n\tfor ix = 0, count - 1 do\n\t\tfor iz = 0, count - 1 do\n\t\t\tif (ix + iz) % 2 == 0 then\n\t\t\t\tlocal x = -half + tile / 2 + ix * tile\n\t\t\t\tlocal z = -half + tile / 2 + iz * tile\n\t\t\t\tBuildKit.part(root, {\n\t\t\t\t\tname = string.format(\"Tile_%d_%d\", ix, iz),\n\t\t\t\t\tsize = Vector3.new(tile - 1, 0.4, tile - 1),\n\t\t\t\t\tcframe = CFrame.new(x, 1.1, z),\n\t\t\t\t\tcolor = Color3.fromRGB(30, 36, 48),\n\t\t\t\t\tmaterial = Enum.Material.SmoothPlastic,\n\t\t\t\t})\n\t\t\tend\n\t\tend\n\tend\n\n\t-- Bốn cột mốc ở góc sân.\n\tlocal corners = {\n\t\tVector3.new(-half + 6, 12, -half + 6),\n\t\tVector3.new(half - 6, 12, -half + 6),\n\t\tVector3.new(-half + 6, 12, half - 6),\n\t\tVector3.new(half - 6, 12, half - 6),\n\t}\n\tfor index, position in ipairs(corners) do\n\t\tBuildKit.part(root, {\n\t\t\tname = \"Pylon\" .. tostring(index),\n\t\t\tsize = Vector3.new(4, 24, 4),\n\t\t\tcframe = CFrame.new(position),\n\t\t\tcolor = Config.Theme.Accent,\n\t\t\tmaterial = Enum.Material.Neon,\n\t\t})\n\tend\n\n\t-- Bục giữa + biển tên game.\n\tBuildKit.part(root, {\n\t\tname = \"CenterPlinth\",\n\t\tsize = Vector3.new(36, 3, 36),\n\t\tcframe = CFrame.new(0, 2.5, 0),\n\t\tcolor = Color3.fromRGB(24, 28, 38),\n\t\tmaterial = Enum.Material.SmoothPlastic,\n\t})\n\tBuildKit.label(root, Config.Tagline, Vector3.new(0, 16, 0), Config.Theme.Accent)\n\n\t-- Cổng vào phía nam.\n\tBuildKit.part(root, {\n\t\tname = \"GateLeft\",\n\t\tsize = Vector3.new(4, 20, 4),\n\t\tcframe = CFrame.new(-14, 10, half - 4),\n\t\tcolor = Color3.fromRGB(90, 100, 120),\n\t})\n\tBuildKit.part(root, {\n\t\tname = \"GateRight\",\n\t\tsize = Vector3.new(4, 20, 4),\n\t\tcframe = CFrame.new(14, 10, half - 4),\n\t\tcolor = Color3.fromRGB(90, 100, 120),\n\t})\n\tBuildKit.part(root, {\n\t\tname = \"GateBeam\",\n\t\tsize = Vector3.new(32, 3, 4),\n\t\tcframe = CFrame.new(0, 21.5, half - 4),\n\t\tcolor = Config.Theme.Accent,\n\t\tmaterial = Enum.Material.Metal,\n\t})\nend\n\nreturn SyncYard\n",
+                      "children": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ServerScriptService": {
+      "className": "ServerScriptService",
+      "isService": true,
+      "managed": false,
+      "children": {
+        "Server": {
+          "className": "Folder",
+          "managed": true,
+          "children": {
+            "Main": {
+              "className": "Script",
+              "managed": true,
+              "repoPath": "src/server/Main.server.luau",
+              "source": "--!strict\n--[[\n\tServer — điểm vào phía server.\n\t1. Tạo remote dùng chung (Net.createRemote).\n\t2. Chờ module thế giới do rebuild_world_action.luau dựng.\n\t3. Chào người chơi mới bằng thông tin sync (để thấy ngay pipeline đã chạy).\n]]\n\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal Shared = ReplicatedStorage:WaitForChild(\"Shared\")\nlocal Config = require(Shared:WaitForChild(\"Config\"))\nlocal Net = require(Shared:WaitForChild(\"Net\"))\n\nlocal Notify = Net.createRemote(\"Notify\")\n\nprint(string.format(\"[brige] server khởi động — %s v%s\", Config.GameName, Config.Version))\n\n-- Chờ thế giới được dựng (tối đa 20s) rồi báo số part cho dễ kiểm tra.\ntask.spawn(function()\n\tlocal deadline = os.clock() + 20\n\trepeat\n\t\ttask.wait(0.5)\n\tuntil workspace:FindFirstChild(Config.WorldName) ~= nil or os.clock() > deadline\n\n\tlocal world = workspace:FindFirstChild(Config.WorldName)\n\tif world then\n\t\tlocal parts = world:GetChildren()\n\t\tprint(string.format(\"[brige] thế giới '%s' sẵn sàng — %d part\", world.Name, #parts))\n\telse\n\t\twarn(\"[brige] chưa thấy thế giới trong Workspace — kiểm tra tác vụ dựng lại trong studio-sync.json.\")\n\tend\nend)\n\nlocal function onPlayerAdded(player: Player)\n\tplayer.CharacterAdded:Connect(function()\n\t\ttask.wait(1)\n\t\tNotify:FireClient(player, {\n\t\t\ttitle = Config.GameName,\n\t\t\tmessage = string.format(\"%s · v%s\", Config.Tagline, Config.Version),\n\t\t})\n\tend)\nend\n\nPlayers.PlayerAdded:Connect(onPlayerAdded)\nfor _, player in ipairs(Players:GetPlayers()) do\n\tonPlayerAdded(player)\nend\n",
+              "children": {}
+            }
+          }
+        }
+      }
+    },
+    "StarterPlayer": {
+      "className": "StarterPlayer",
+      "isService": true,
+      "managed": false,
+      "children": {
+        "StarterPlayerScripts": {
+          "className": "StarterPlayerScripts",
+          "isService": false,
+          "managed": false,
+          "children": {
+            "Client": {
+              "className": "LocalScript",
+              "managed": true,
+              "children": {
+                "UI": {
+                  "className": "Folder",
+                  "managed": true,
+                  "children": {
+                    "Hud": {
+                      "className": "ModuleScript",
+                      "managed": true,
+                      "repoPath": "src/client/UI/Hud.luau",
+                      "source": "--!strict\n--[[\n\tHud — bảng nhỏ ở góc trên trái: tên game, version, dòng trạng thái.\n\tMục đích: nhìn 1 giây là biết Studio đang chạy bản vừa publish hay bản cũ.\n]]\n\nexport type HudConfig = {\n\tGameName: string,\n\tTagline: string,\n\tVersion: string,\n\tTheme: {\n\t\tBackground: Color3,\n\t\tSurface: Color3,\n\t\tAccent: Color3,\n\t\tText: Color3,\n\t\tMuted: Color3,\n\t},\n}\n\nexport type Hud = {\n\tgui: ScreenGui,\n\tstatus: TextLabel,\n\tsetStatus: (self: Hud, message: string) -> (),\n\tdestroy: (self: Hud) -> (),\n}\n\nlocal Hud = {}\nHud.__index = Hud\n\nfunction Hud.new(playerGui: PlayerGui, config: HudConfig): Hud\n\tlocal self = (setmetatable({} :: any, Hud) :: any) :: Hud\n\n\tlocal gui = Instance.new(\"ScreenGui\")\n\tgui.Name = \"BrigeHud\"\n\tgui.ResetOnSpawn = false\n\tgui.IgnoreGuiInset = true\n\tgui.Parent = playerGui\n\n\tlocal frame = Instance.new(\"Frame\")\n\tframe.Name = \"Panel\"\n\tframe.AnchorPoint = Vector2.new(0, 0)\n\tframe.Position = UDim2.fromOffset(16, 16)\n\tframe.Size = UDim2.fromOffset(248, 96)\n\tframe.BackgroundColor3 = config.Theme.Background\n\tframe.BackgroundTransparency = 0.12\n\tframe.BorderSizePixel = 0\n\tframe.Parent = gui\n\n\tlocal corner = Instance.new(\"UICorner\")\n\tcorner.CornerRadius = UDim.new(0, 10)\n\tcorner.Parent = frame\n\n\tlocal stroke = Instance.new(\"UIStroke\")\n\tstroke.Color = config.Theme.Accent\n\tstroke.Thickness = 1\n\tstroke.Transparency = 0.5\n\tstroke.Parent = frame\n\n\tlocal pad = Instance.new(\"UIPadding\")\n\tpad.PaddingTop = UDim.new(0, 10)\n\tpad.PaddingBottom = UDim.new(0, 10)\n\tpad.PaddingLeft = UDim.new(0, 12)\n\tpad.PaddingRight = UDim.new(0, 12)\n\tpad.Parent = frame\n\n\tlocal title = Instance.new(\"TextLabel\")\n\ttitle.Name = \"Title\"\n\ttitle.BackgroundTransparency = 1\n\ttitle.Size = UDim2.new(1, 0, 0, 22)\n\ttitle.Font = Enum.Font.GothamBold\n\ttitle.TextSize = 16\n\ttitle.TextXAlignment = Enum.TextXAlignment.Left\n\ttitle.TextColor3 = config.Theme.Text\n\ttitle.Text = string.format(\"%s · v%s\", config.GameName, config.Version)\n\ttitle.Parent = frame\n\n\tlocal subtitle = Instance.new(\"TextLabel\")\n\tsubtitle.Name = \"Subtitle\"\n\tsubtitle.BackgroundTransparency = 1\n\tsubtitle.Position = UDim2.fromOffset(0, 24)\n\tsubtitle.Size = UDim2.new(1, 0, 0, 18)\n\tsubtitle.Font = Enum.Font.GothamMedium\n\tsubtitle.TextSize = 12\n\tsubtitle.TextXAlignment = Enum.TextXAlignment.Left\n\tsubtitle.TextColor3 = config.Theme.Muted\n\tsubtitle.Text = config.Tagline\n\tsubtitle.Parent = frame\n\n\tlocal status = Instance.new(\"TextLabel\")\n\tstatus.Name = \"Status\"\n\tstatus.BackgroundTransparency = 1\n\tstatus.Position = UDim2.fromOffset(0, 48)\n\tstatus.Size = UDim2.new(1, 0, 0, 28)\n\tstatus.Font = Enum.Font.Code\n\tstatus.TextSize = 12\n\tstatus.TextWrapped = true\n\tstatus.TextXAlignment = Enum.TextXAlignment.Left\n\tstatus.TextColor3 = config.Theme.Accent\n\tstatus.Text = \"đang tải...\"\n\tstatus.Parent = frame\n\n\tself.gui = gui\n\tself.status = status\n\treturn self\nend\n\nfunction Hud.setStatus(self: Hud, message: string)\n\tself.status.Text = message\nend\n\nfunction Hud.destroy(self: Hud)\n\tself.gui:Destroy()\nend\n\nreturn Hud\n",
+                      "children": {}
+                    }
+                  }
+                }
+              },
+              "source": "--!strict\n--[[\n\tClient — điểm vào phía client: dựng HUD nhỏ để xác nhận script đã đồng bộ.\n\tHUD do src/client/UI/Hud.luau vẽ, dữ liệu từ RemoteEvent \"Notify\".\n]]\n\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal Shared = ReplicatedStorage:WaitForChild(\"Shared\")\nlocal Config = require(Shared:WaitForChild(\"Config\"))\nlocal Net = require(Shared:WaitForChild(\"Net\"))\n\nlocal Hud = require(script.Parent:WaitForChild(\"UI\"):WaitForChild(\"Hud\"))\n\nlocal player = Players.LocalPlayer\nlocal hud = Hud.new(player:WaitForChild(\"PlayerGui\"), Config)\n\nlocal Notify = Net.waitForRemote(\"Notify\", 15)\nif Notify then\n\tNotify.OnClientEvent:Connect(function(payload)\n\t\tif type(payload) == \"table\" then\n\t\t\thud:setStatus(tostring(payload.message or payload.title or \"\"))\n\t\tend\n\tend)\nelse\n\thud:setStatus(\"Không thấy RemoteEvent Notify — kiểm tra server script.\")\nend\n\nprint(\"[brige] client đã chạy — chờ đồng bộ từ GitHub.\")\n",
+              "repoPath": "src/client/Init.client.luau"
+            }
+          }
+        }
+      }
+    },
+    "Workspace": {
+      "className": "Workspace",
+      "isService": true,
+      "managed": false,
+      "properties": {
+        "FilteringEnabled": true,
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 64,
+        "StreamingTargetRadius": 1024,
+        "StreamingIntegrityMode": "PauseOutsideLoadedArea",
+        "ModelStreamingBehavior": "Improved",
+        "StreamOutBehavior": "Opportunistic"
+      },
+      "children": {
+        "Baseplate": {
+          "className": "Part",
+          "isService": false,
+          "managed": false,
+          "properties": {
+            "Anchored": true,
+            "Color": [
+              0.38823,
+              0.37254,
+              0.38823
+            ],
+            "Locked": true,
+            "Position": [
+              0,
+              -10,
+              0
+            ],
+            "Size": [
+              512,
+              20,
+              512
+            ]
+          },
+          "children": {}
+        }
+      }
+    },
+    "Lighting": {
+      "className": "Lighting",
+      "isService": true,
+      "managed": false,
+      "properties": {
+        "Ambient": [
+          0,
+          0,
+          0
+        ],
+        "Brightness": 2,
+        "GlobalShadows": true,
+        "Outlines": false,
+        "Technology": "Voxel"
+      },
+      "children": {}
+    },
+    "SoundService": {
+      "className": "SoundService",
+      "isService": true,
+      "managed": false,
+      "properties": {
+        "RespectFilteringEnabled": true
+      },
+      "children": {}
+    }
+  },
+  "actions": [
+    {
+      "id": "act-8b476ed075fd",
+      "description": "Dựng lại thế giới brige (tăng dần theo mã băm từng module)",
+      "code": "--!strict\n--[[\n\trebuild_world_action.luau — tác vụ \"Dựng lại thế giới\" chạy SAU khi plugin\n\tđã áp Rojo (publish.mjs đính kèm file này vào studio-sync.json mỗi lần publish).\n\n\tVì sao cần: plugin chỉ ghi Source vào các Script/ModuleScript. Nếu module dựng\n\tthế giới đã chạy từ trước, sửa Source KHÔNG làm thế giới đổi → mở Studio ra vẫn\n\tthấy y hệt bản cũ. Tác vụ này xoá + dựng lại từ mã nguồn mới.\n\n\tHợp đồng với từng module trong ReplicatedStorage.Shared.World.Modules:\n\t\tmodule.build(root: Folder, kit: table) -> ()   -- tuỳ chọn\n\t\tmodule.FOUNDATION = true                        -- tuỳ chọn: đổi là dựng lại toàn bộ\n\tKhông có module nào cũng không sao: chỉ dọn thế giới cũ.\n\n\tBăm từng module để chỉ dựng lại khi thật sự có thay đổi (tăng dần).\n]]\n\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal ServerStorage = game:GetService(\"ServerStorage\")\n\nlocal WORLD_NAME = \"BrigeWorld\"\nlocal MODULES_KEY = \"Shared.World.Modules\"\nlocal HASH_ATTR = \"__BrigeWorldHash\"\n\nlocal function log(...: any)\n\tprint(\"[brige World]\", ...)\nend\n\nlocal function findModules(): Instance?\n\tlocal shared = ReplicatedStorage:FindFirstChild(\"Shared\")\n\tif not shared then\n\t\treturn nil\n\tend\n\tlocal world = shared:FindFirstChild(\"World\")\n\tif not world then\n\t\treturn nil\n\tend\n\treturn world:FindFirstChild(\"Modules\")\nend\n\n-- Băm Source của mọi module (sắp xếp theo tên để băm ổn định).\nlocal function hashModules(modules: Instance): (string, number)\n\tlocal parts = {}\n\tlocal count = 0\n\tfor _, child in ipairs(modules:GetChildren()) do\n\t\tif child:IsA(\"ModuleScript\") then\n\t\t\tlocal ok, src = pcall(function()\n\t\t\t\treturn (child :: any).Source\n\t\t\tend)\n\t\t\ttable.insert(parts, child.Name .. \":\" .. tostring(if ok then src else \"\"))\n\t\t\tcount += 1\n\t\tend\n\tend\n\ttable.sort(parts)\n\treturn tostring(#table.concat(parts)) .. \":\" .. tostring(#parts), count\nend\n\nlocal modules = findModules()\nif not modules then\n\tlog(\"không thấy\", MODULES_KEY, \"→ chỉ dọn thế giới cũ (nếu có).\")\nend\n\nlocal signature = if modules then hashModules(modules) else \"0:0\"\nlocal previous = ServerStorage:GetAttribute(HASH_ATTR)\nlocal existingRoot = workspace:FindFirstChild(WORLD_NAME)\n\nif existingRoot and previous == signature then\n\tlog(\"thế giới đã đúng bản hiện tại (\" .. tostring(signature) .. \") → bỏ qua dựng lại.\")\n\treturn\nend\n\n-- Dọn thế giới cũ (chỉ đụng vào folder do bridge quản lý).\nif existingRoot then\n\texistingRoot:Destroy()\nend\n\nlocal root = Instance.new(\"Folder\")\nroot.Name = WORLD_NAME\nroot.Parent = workspace\n\nlocal kit = {\n\troot = root,\n\tmodules = modules,\n\tlog = log,\n\tmakePart = function(name: string, size: Vector3, cframe: CFrame, color: Color3): Part\n\t\tlocal part = Instance.new(\"Part\")\n\t\tpart.Name = name\n\t\tpart.Size = size\n\t\tpart.CFrame = cframe\n\t\tpart.Anchored = true\n\t\tpart.Color = color\n\t\tpart.TopSurface = Enum.SurfaceType.Smooth\n\t\tpart.BottomSurface = Enum.SurfaceType.Smooth\n\t\tpart.Parent = root\n\t\treturn part\n\tend,\n}\n\nlocal built, failed = 0, 0\nif modules then\n\tfor _, child in ipairs(modules:GetChildren()) do\n\t\tif child:IsA(\"ModuleScript\") then\n\t\t\tlocal okRun, modOrErr = pcall(require, child)\n\t\t\tif not okRun or type(modOrErr) ~= \"table\" then\n\t\t\t\tfailed += 1\n\t\t\t\twarn(\"[brige World] bỏ qua module lỗi:\", child.Name, modOrErr)\n\t\t\t\tcontinue\n\t\t\tend\n\t\t\tlocal mod = modOrErr :: any\n\t\t\tif type(mod.build) == \"function\" then\n\t\t\t\tlocal okBuild, err = pcall(mod.build, root, kit)\n\t\t\t\tif okBuild then\n\t\t\t\t\tbuilt += 1\n\t\t\t\telse\n\t\t\t\t\tfailed += 1\n\t\t\t\t\twarn(\"[brige World] build lỗi ở\", child.Name, err)\n\t\t\t\tend\n\t\t\tend\n\t\tend\n\tend\nend\n\nServerStorage:SetAttribute(HASH_ATTR, signature)\nlog(string.format(\"dựng lại xong: %d module, %d lỗi, %d part (băm %s)\", built, failed, #root:GetChildren(), signature))\n",
+      "createdAt": "2026-10-31T10:58:29.055Z"
+    }
+  ]
+}
